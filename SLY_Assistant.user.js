@@ -18,6 +18,12 @@
 (async function () {
   "use strict";
 
+  class Fleet {
+    constructor(label) {
+      this.label = label;
+    }
+  }
+
   //Used for reading solana data
   let customReadRPCs = [];
 
@@ -17774,6 +17780,7 @@
         txHash,
         confirmation: { name: "TransactionExpiredBlockheightExceededError" },
       };
+      debugger;
     txHash = await solanaWriteConnection.sendRawTransaction(txSerialized, {
       skipPreflight: true,
       maxRetries: 0,
@@ -17808,6 +17815,7 @@
       curBlockHeight = epochInfo.blockHeight;
     }
 
+    debugger;
     cLog(3, `${FleetTimeStamp(fleet.label)} <${opName}> TRYING 🌐`);
     return await sendAndConfirmTx(
       txSerialized,
@@ -19826,6 +19834,7 @@
         "#assistStatus .assist-modal-body table"
       );
       targetElem.appendChild(fleetRow);
+      // debugger;
     }
 
     if (
@@ -38894,8 +38903,9 @@
           resolve(txResult);
         });
       }
-    
+
       async function execStartupUndock(i, assignment) {
+        debugger;
         const fleet = userFleets[i];
         cLog(1, `${FleetTimeStamp(fleet.label)} Undock ${assignment} Startup`);
     
@@ -40786,6 +40796,7 @@
       }
     
       async function handleMovement(i, moveDist, moveX, moveY) {
+        debugger;
         let moveTime = 1;
         let warpCooldownFinished = 0;
         let fleetAcctInfo = await getAccountInfo(
@@ -40993,6 +41004,7 @@
       }
     
       async function handleScan(i, fleetCoords, destCoords) {
+        debugger;
         let fleetCurrentCargo =
           await solanaReadConnection.getParsedTokenAccountsByOwner(
             userFleets[i].cargoHold,
@@ -41449,6 +41461,7 @@
       }
     
       async function handleMining(i, fleetState, fleetCoords, fleetMining) {
+        debugger;
         let destX = userFleets[i].destCoord.split(",")[0].trim();
         let destY = userFleets[i].destCoord.split(",")[1].trim();
         let starbaseX = userFleets[i].starbaseCoord.split(",")[0].trim();
@@ -41990,6 +42003,7 @@
         return false;
       }
       async function handleTransport(i, fleetState, fleetCoords) {
+        debugger;
         const [destX, destY] = ConvertCoords(userFleets[i].destCoord);
         const [starbaseX, starbaseY] = ConvertCoords(userFleets[i].starbaseCoord);
     
@@ -42627,7 +42641,7 @@
             );
             updateFleetState(userFleets[i], fleetState);
           }
-    
+
           if (userFleets[i].iterCnt < 2 && fleetState == "StarbaseLoadingBay") {
             if (
               fleetParsedData.assignment == "Scan" ||
@@ -42670,6 +42684,7 @@
                 "Mine [" + TimeToStr(new Date(Date.now())) + "]"
               );
             }
+
             await handleMining(i, userFleets[i].state, fleetCoords, fleetMining);
           } else if (fleetParsedData.assignment == "Transport") {
             await handleTransport(i, userFleets[i].state, fleetCoords);
@@ -45536,7 +45551,6 @@
           fleet.initilizedScanPDAs = true;
         }
 
-        debugger;
         await operateFleet(i);
 
         fleet.fontColor = "white";
@@ -45576,7 +45590,6 @@
 
       //Stagger fleet starts by 500ms to avoid overloading the RPC
 
-      debugger;
       setTimeout(() => {
         startFleet(i);
       }, 500 * (i + 1));
@@ -45659,7 +45672,6 @@
           userFleets[i].publicKey
         );
         let [fleetState, extra] = getFleetState(fleetAcctInfo);
-        debugger;
         let fleetCoords = fleetState == "Idle" && extra ? extra : [];
         userFleets[i].startingCoords = fleetCoords;
         userFleets[i].state = fleetState;
