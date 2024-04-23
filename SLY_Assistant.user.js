@@ -59,7 +59,7 @@
             "full fleet info",
             userFleets[i].publicKey
           );
-          let [fleetState, extra] = getFleetState(fleetAcctInfo);
+          let [fleetState, extra] = window.Fleet.getFleetState(fleetAcctInfo);
           let fleetCoords = fleetState == "Idle" && extra ? extra : [];
           userFleets[i].startingCoords = fleetCoords;
           userFleets[i].state = fleetState;
@@ -586,6 +586,485 @@
       debugger;
     }
 
+    calcNextWarpPoint(warpRange, startCoords, endCoords) {
+      const [startX, startY] = [Number(startCoords[0]), Number(startCoords[1])];
+      const [endX, endY] = [Number(endCoords[0]), Number(endCoords[1])];
+      const moveDist = calculateMovementDistance(
+        [startX, startY],
+        [endX, endY]
+      );
+      const realWarpRange = warpRange / 100;
+      const warpCount = realWarpRange > 0 ? moveDist / realWarpRange : 1;
+
+      if (warpCount < 1) return endCoords; //In range for single jump?
+
+      //Calculate raw distance
+      let dx = (endX - startX) / warpCount;
+      let dy = (endY - startY) / warpCount;
+
+      //Refine distance
+      dx = dx > 0 ? Math.floor(dx) : Math.ceil(dx);
+      dy = dy > 0 ? Math.floor(dy) : Math.ceil(dy);
+
+      //Calculate and return waypoint coordinates
+      return [startX + dx, startY + dy];
+    }
+
+    calculateWarpTime(fleet, distance) {
+      return fleet.warpSpeed > 0 ? distance / (fleet.warpSpeed / 1e6) : 0;
+    }
+
+    calcWarpFuelReq(fleet, startCoords, endCoords) {
+      if (!CoordsValid(startCoords) || !CoordsValid(endCoords)) {
+        window.logger.cLog(
+          4,
+          `${window.utils.timeUtils.FleetTimeStamp(
+            fleet.label
+          )} calcWarpFuelReq: Bad coords`,
+          startCoords,
+          endCoords
+        );
+        return 0;
+      }
+      if (CoordsEqual(startCoords, endCoords)) {
+        window.logger.cLog(
+          4,
+          `${window.utils.timeUtils.FleetTimeStamp(
+            fleet.label
+          )} calcWarpFuelReq: Same coords`,
+          startCoords,
+          endCoords
+        );
+        return 0;
+      }
+
+      const [startX, startY] = [Number(startCoords[0]), Number(startCoords[1])];
+
+      let jumps = 0;
+      let fuelRequired = 0;
+      let curWP = [startX, startY];
+
+      while (!CoordsEqual(curWP, endCoords)) {
+        const nextWP = calcNextWarpPoint(
+          fleet.maxWarpDistance,
+          curWP,
+          endCoords
+        );
+        const distance = calculateMovementDistance(curWP, nextWP);
+        fuelRequired += Math.ceil(
+          distance * (fleet.warpFuelConsumptionRate / 100)
+        );
+        curWP = nextWP;
+        jumps++;
+      }
+
+      //window.logger.cLog(4, `${window.utils.timeUtils.FleetTimeStamp(fleet.label)} calcWarpFuelReq: ${fuelRequired} fuel over ${jumps} jumps`);
+      return fuelRequired;
+    }
+
+    calculateMovementDistance(orig, dest) {
+      return dest
+        ? Math.sqrt((orig[0] - dest[0]) ** 2 + (orig[1] - dest[1]) ** 2)
+        : 0;
+    }
+
+    calculateSubwarpTime(fleet, distance) {
+      return fleet.subwarpSpeed > 0 ? distance / (fleet.subwarpSpeed / 1e6) : 0;
+    }
+
+    calculateSubwarpFuelBurn(fleet, distance) {
+      return distance * (fleet.subwarpFuelConsumptionRate / 100);
+    }
+
+    getFleetState(fleetAcctInfo) {
+      let remainingData = fleetAcctInfo.data.subarray(439);
+      let fleetState = "Unknown";
+      let extra = null;
+      switch (remainingData[0]) {
+        case 0:
+          fleetState = "StarbaseLoadingBay";
+          extra = sageProgram.coder.types.decode(
+            "StarbaseLoadingBay",
+            remainingData.subarray(1)
+          );
+          break;
+        case 1: {
+          fleetState = "Idle";
+          let sector = sageProgram.coder.types.decode(
+            "Idle",
+            remainingData.subarray(1)
+          );
+          extra = [sector.sector[0].toNumber(), sector.sector[1].toNumber()];
+          break;
+        }
+        case 2:
+          fleetState = "MineAsteroid";
+          extra = sageProgram.coder.types.decode(
+            "MineAsteroid",
+            remainingData.subarray(1)
+          );
+          break;
+        case 3:
+          fleetState = "MoveWarp";
+          extra = sageProgram.coder.types.decode(
+            "MoveWarp",
+            remainingData.subarray(1)
+          );
+          break;
+        case 4:
+          fleetState = "MoveSubwarp";
+          extra = sageProgram.coder.types.decode(
+            "MoveSubwarp",
+            remainingData.subarray(1)
+          );
+          break;
+        case 5:
+          fleetState = "Respawn";
+          break;
+        case 6:
+          fleetState = "StarbaseUpgrade";
+          break;
+        case 7:
+          fleetState = "ReadyToExitWarp";
+          break;
+      }
+      return [fleetState, extra];
+    }
+
+    async execExitWarp(fleet) {
+      return new Promise(async (resolve) => {
+        let tx = {
+          instruction: await sageProgram.methods
+            .fleetStateHandler()
+            .accountsStrict({
+              fleet: fleet.publicKey,
+            })
+            .remainingAccounts([
+              {
+                pubkey: userXpAccounts.userPilotingXpAccounts.userPointsAccount,
+                isSigner: false,
+                isWritable: true,
+              },
+              {
+                pubkey: userXpAccounts.userPilotingXpAccounts.pointsCategory,
+                isSigner: false,
+                isWritable: false,
+              },
+              {
+                pubkey:
+                  userXpAccounts.userPilotingXpAccounts.pointsModifierAccount,
+                isSigner: false,
+                isWritable: false,
+              },
+              {
+                pubkey:
+                  userXpAccounts.userCouncilRankXpAccounts.userPointsAccount,
+                isSigner: false,
+                isWritable: true,
+              },
+              {
+                pubkey: userXpAccounts.userCouncilRankXpAccounts.pointsCategory,
+                isSigner: false,
+                isWritable: false,
+              },
+              {
+                pubkey:
+                  userXpAccounts.userCouncilRankXpAccounts
+                    .pointsModifierAccount,
+                isSigner: false,
+                isWritable: false,
+              },
+              {
+                pubkey: userProfileAcct,
+                isSigner: false,
+                isWritable: false,
+              },
+              {
+                pubkey: progressionConfigAcct,
+                isSigner: false,
+                isWritable: false,
+              },
+              {
+                pubkey: sageGameAcct.publicKey,
+                isSigner: false,
+                isWritable: false,
+              },
+              {
+                pubkey: pointsProgramId,
+                isSigner: false,
+                isWritable: false,
+              },
+            ])
+            .instruction(),
+        };
+
+        cLog(1, `${FleetTimeStamp(fleet.label)} Exiting Warp`);
+        updateFleetState(fleet, "Exiting Warp");
+
+        let txResult = await txSignAndSend(tx, fleet, "EXIT WARP");
+
+        cLog(1, `${FleetTimeStamp(fleet.label)} Idle 💤`);
+        updateFleetState(fleet, "Idle");
+
+        resolve(txResult);
+      });
+    }
+
+    async execExitSubwarp(fleet) {
+      return new Promise(async (resolve) => {
+        let fuelCargoTypeAcct = cargoTypes.find(
+          (item) =>
+            item.account.mint.toString() == sageGameAcct.account.mints.fuel
+        );
+        let tx = {
+          instruction: await sageProgram.methods
+            .fleetStateHandler()
+            .accountsStrict({
+              fleet: fleet.publicKey,
+            })
+            .remainingAccounts([
+              {
+                pubkey: userProfileAcct,
+                isSigner: false,
+                isWritable: true,
+              },
+              {
+                pubkey: fleet.fuelTank,
+                isSigner: false,
+                isWritable: true,
+              },
+              {
+                pubkey: fuelCargoTypeAcct.publicKey,
+                isSigner: false,
+                isWritable: false,
+              },
+              {
+                pubkey: sageGameAcct.account.cargo.statsDefinition,
+                isSigner: false,
+                isWritable: false,
+              },
+              {
+                pubkey: fleet.fuelToken,
+                isSigner: false,
+                isWritable: true,
+              },
+              {
+                pubkey: sageGameAcct.account.mints.fuel,
+                isSigner: false,
+                isWritable: true,
+              },
+              {
+                pubkey: userXpAccounts.userPilotingXpAccounts.userPointsAccount,
+                isSigner: false,
+                isWritable: true,
+              },
+              {
+                pubkey: userXpAccounts.userPilotingXpAccounts.pointsCategory,
+                isSigner: false,
+                isWritable: false,
+              },
+              {
+                pubkey:
+                  userXpAccounts.userPilotingXpAccounts.pointsModifierAccount,
+                isSigner: false,
+                isWritable: false,
+              },
+              {
+                pubkey:
+                  userXpAccounts.userCouncilRankXpAccounts.userPointsAccount,
+                isSigner: false,
+                isWritable: true,
+              },
+              {
+                pubkey: userXpAccounts.userCouncilRankXpAccounts.pointsCategory,
+                isSigner: false,
+                isWritable: false,
+              },
+              {
+                pubkey:
+                  userXpAccounts.userCouncilRankXpAccounts
+                    .pointsModifierAccount,
+                isSigner: false,
+                isWritable: false,
+              },
+              {
+                pubkey: progressionConfigAcct,
+                isSigner: false,
+                isWritable: false,
+              },
+              {
+                pubkey: sageGameAcct.publicKey,
+                isSigner: false,
+                isWritable: false,
+              },
+              {
+                pubkey: pointsProgramId,
+                isSigner: false,
+                isWritable: false,
+              },
+              {
+                pubkey: cargoProgramPK,
+                isSigner: false,
+                isWritable: false,
+              },
+              {
+                pubkey: tokenProgramPK,
+                isSigner: false,
+                isWritable: false,
+              },
+            ])
+            .instruction(),
+        };
+
+        cLog(1, `${FleetTimeStamp(fleet.label)} Exiting Subwarp`);
+        updateFleetState(fleet, "Exiting Subwarp");
+
+        let txResult = await txSignAndSend(tx, fleet, "EXIT SUBWARP");
+
+        cLog(1, `${FleetTimeStamp(fleet.label)} Idle 💤`);
+        updateFleetState(fleet, "Idle");
+
+        resolve(txResult);
+      });
+    }
+
+    async execWarp(fleet, destX, destY, moveTime) {
+      return new Promise(async (resolve) => {
+        let fuelCargoTypeAcct = cargoTypes.find(
+          (item) =>
+            item.account.mint.toString() == sageGameAcct.account.mints.fuel
+        );
+        let tx = {
+          instruction: await sageProgram.methods
+            .warpToCoordinate({
+              keyIndex: new BrowserAnchor.anchor.BN(userProfileKeyIdx),
+              toSector: [
+                new BrowserAnchor.anchor.BN(destX),
+                new BrowserAnchor.anchor.BN(destY),
+              ],
+            })
+            .accountsStrict({
+              gameAccountsFleetAndOwner: {
+                gameFleetAndOwner: {
+                  fleetAndOwner: {
+                    fleet: fleet.publicKey,
+                    owningProfile: userProfileAcct,
+                    owningProfileFaction: userProfileFactionAcct.publicKey,
+                    key: userPublicKey,
+                  },
+                  gameId: sageGameAcct.publicKey,
+                },
+                gameState: sageGameAcct.account.gameState,
+              },
+              fuelTank: fleet.fuelTank,
+              cargoType: fuelCargoTypeAcct.publicKey,
+              statsDefinition: sageGameAcct.account.cargo.statsDefinition,
+              tokenFrom: fleet.fuelToken,
+              tokenMint: sageGameAcct.account.mints.fuel,
+              cargoProgram: cargoProgramPK,
+              tokenProgram: tokenProgramPK,
+            })
+            .instruction(),
+        };
+
+        const coordStr = `[${destX},${destY}]`;
+        cLog(1, `${FleetTimeStamp(fleet.label)} Warping to ${coordStr}`);
+        updateFleetState(fleet, "Warping");
+
+        let txResult = await txSignAndSend(tx, fleet, "WARP");
+
+        const travelEndTime = TimeToStr(
+          new Date(Date.now() + (moveTime * 1000 + 10000))
+        );
+        const newFleetState = `Warp ${coordStr} ${travelEndTime}`;
+        updateFleetState(fleet, newFleetState);
+
+        fleet.warpCoolDownFinish =
+          Date.now() + fleet.warpCooldown * 1000 + 2000;
+
+        resolve({ txResult, warpCooldownFinished: fleet.warpCoolDownFinish });
+      });
+    }
+
+    async execExitWarp(fleet) {
+      return new Promise(async (resolve) => {
+        let tx = {
+          instruction: await sageProgram.methods
+            .fleetStateHandler()
+            .accountsStrict({
+              fleet: fleet.publicKey,
+            })
+            .remainingAccounts([
+              {
+                pubkey: userXpAccounts.userPilotingXpAccounts.userPointsAccount,
+                isSigner: false,
+                isWritable: true,
+              },
+              {
+                pubkey: userXpAccounts.userPilotingXpAccounts.pointsCategory,
+                isSigner: false,
+                isWritable: false,
+              },
+              {
+                pubkey:
+                  userXpAccounts.userPilotingXpAccounts.pointsModifierAccount,
+                isSigner: false,
+                isWritable: false,
+              },
+              {
+                pubkey:
+                  userXpAccounts.userCouncilRankXpAccounts.userPointsAccount,
+                isSigner: false,
+                isWritable: true,
+              },
+              {
+                pubkey: userXpAccounts.userCouncilRankXpAccounts.pointsCategory,
+                isSigner: false,
+                isWritable: false,
+              },
+              {
+                pubkey:
+                  userXpAccounts.userCouncilRankXpAccounts
+                    .pointsModifierAccount,
+                isSigner: false,
+                isWritable: false,
+              },
+              {
+                pubkey: userProfileAcct,
+                isSigner: false,
+                isWritable: false,
+              },
+              {
+                pubkey: progressionConfigAcct,
+                isSigner: false,
+                isWritable: false,
+              },
+              {
+                pubkey: sageGameAcct.publicKey,
+                isSigner: false,
+                isWritable: false,
+              },
+              {
+                pubkey: pointsProgramId,
+                isSigner: false,
+                isWritable: false,
+              },
+            ])
+            .instruction(),
+        };
+
+        cLog(1, `${FleetTimeStamp(fleet.label)} Exiting Warp`);
+        updateFleetState(fleet, "Exiting Warp");
+
+        let txResult = await txSignAndSend(tx, fleet, "EXIT WARP");
+
+        cLog(1, `${FleetTimeStamp(fleet.label)} Idle 💤`);
+        updateFleetState(fleet, "Idle");
+
+        resolve(txResult);
+      });
+    }
+
     async fleetHealthCheck() {
       if (!enableAssistant) return;
 
@@ -646,6 +1125,30 @@
       if (enableAssistant) setTimeout(fleetHealthCheck, 10000);
     }
 
+    async fuelFleet(fleet, dockCoords, account, amount) {
+      window.logger.cLog(
+        1,
+        `${window.utils.timeUtils.FleetTimeStamp(
+          fleet.label
+        )} Filling fuel tank: ${amount}`
+      );
+      let fuelCargoTypeAcct = cargoTypes.find(
+        (item) =>
+          item.account.mint.toString() == sageGameAcct.account.mints.fuel
+      );
+      const fuelResp = await execCargoFromStarbaseToFleet(
+        fleet,
+        fleet.fuelTank,
+        account,
+        sageGameAcct.account.mints.fuel.toString(),
+        fuelCargoTypeAcct,
+        dockCoords,
+        amount
+      );
+
+      return fuelResp;
+    }
+
     async getFleetFuelData(fleet, currentPos, targetPos) {
       const moveDist = calculateMovementDistance(currentPos, targetPos);
       const fleetCurrentFuelTank =
@@ -676,28 +1179,400 @@
       };
     }
 
-    async fuelFleet(fleet, dockCoords, account, amount) {
+    async getFleetCntAtCoords() {
+      let gridSizeElem = document.querySelector("#fleetGridSelect");
+      let gridSize = gridSizeElem.value;
+      let targetCoordsElem = document.querySelector("#checkFleetCntInput");
+      let targetCoords = targetCoordsElem.value;
+      let fleetGrid = document.querySelector("#fleetGrid");
+      let loadingMessage = document.querySelector("#loadingMessage");
+      if (!targetCoords || targetCoords.trim() === "") {
+        loadingMessage.innerText =
+          "Please enter target coordinates for grid center.";
+        loadingMessage.style.display = "block";
+        fleetGrid.style.display = "none";
+        return; // Stop further processing since input is empty or idle
+      }
+      let [x, y] = targetCoords
+        .split(",")
+        .map((coord) => parseInt(coord.trim()));
+
+      fleetGrid.innerHTML = ""; // Clear previous results
+
+      try {
+        loadingMessage.innerText = "Loading...";
+        loadingMessage.style.display = "block";
+        fleetGrid.style.display = "none";
+
+        for (let i = 0; i < gridSize; i++) {
+          let row = fleetGrid.insertRow();
+          for (let j = 0; j < gridSize; j++) {
+            let coordX = x + j - Math.floor(gridSize / 2); // Adjusted for column-first population
+            let coordY = y + (gridSize - 1) - i - Math.floor(gridSize / 2); // Adjusted for descending y value
+
+            let xBN = new BrowserAnchor.anchor.BN(coordX);
+            let xArr = xBN
+              .toTwos(64)
+              .toArrayLike(BrowserBuffer.Buffer.Buffer, "le", 8);
+            let x58 = bs58.encode(xArr);
+
+            let yBN = new BrowserAnchor.anchor.BN(coordY);
+            let yArr = yBN
+              .toTwos(64)
+              .toArrayLike(BrowserBuffer.Buffer.Buffer, "le", 8);
+            let y58 = bs58.encode(yArr);
+
+            let fleetAccts =
+              await window.blockchainManager.solanaReadConnection.getProgramAccounts(
+                sageProgramPK,
+                {
+                  filters: [
+                    { memcmp: { offset: 415, bytes: x58 } },
+                    { memcmp: { offset: 423, bytes: y58 } },
+                  ],
+                }
+              );
+
+            let cell = row.insertCell(j);
+            // Create a div to hold the content for formatting
+            let contentDiv = document.createElement("div");
+            contentDiv.style.textAlign = "center";
+
+            // Set the content of the div (coordinates and fleet count)
+            contentDiv.innerHTML = `<div>[${coordX},${coordY}]</div><div>${fleetAccts.length}</div>`;
+
+            // Calculate gradient color based on fleetAccts.length
+            const gradientColor = calculateGradientColor(fleetAccts.length);
+
+            // Apply background gradient
+            cell.style.background = gradientColor;
+
+            // Apply border style
+            cell.style.border = "2px solid rgb(255, 190, 77)";
+            cell.style.borderRadius = "8px";
+            cell.style.padding = "9px"; // Adjust padding to maintain inner content space
+            cell.style.position = "relative";
+
+            // Append the content div to the cell
+            cell.appendChild(contentDiv);
+
+            // Add a green Unicode circle if fleet count is below 5
+            if (fleetAccts.length < 5) {
+              const greenCircle = document.createElement("div");
+              greenCircle.style.position = "absolute";
+              greenCircle.style.bottom = "-3px";
+              greenCircle.style.right = "0px";
+              greenCircle.style.fontSize = "20px";
+              greenCircle.innerHTML = "&#9679;"; // Unicode circle
+              greenCircle.style.color = "rgb(0, 255, 0, 1)";
+              greenCircle.style.opacity = "1.0";
+              cell.appendChild(greenCircle);
+            }
+
+            // Function to calculate gradient color
+            function calculateGradientColor(fleetCount) {
+              const maxFleetCount = 25; // Maximum fleet count for the hottest color
+              const minFleetCount = 0; // Minimum fleet count for the coolest color
+
+              // Map the fleet count to an RGB value (blue to red gradient)
+              const r = Math.floor((fleetCount / maxFleetCount) * 255);
+              const g = 0;
+              const b = Math.floor(
+                ((maxFleetCount - fleetCount) / maxFleetCount) * 255
+              );
+
+              // Calculate the gradient direction based on fleet count (0 degrees for cool to 90 degrees for hot)
+              const gradientDirection = 0 + (fleetCount / maxFleetCount) * 90;
+
+              // Adjust the gradient direction by 180 degrees to place it at the bottom
+              const adjustedGradientDirection = gradientDirection - 45;
+
+              // Construct the gradient CSS with stops from 0% to 50% for the color and 50% to 100% for transparent
+              return `linear-gradient(${adjustedGradientDirection}deg, rgba(${r}, ${g}, ${b}, 1) 0%, rgba(${r}, ${g}, ${b}, 0) 50%, rgba(${r}, ${g}, ${b}, 0) 100%)`;
+            }
+          }
+        }
+
+        loadingMessage.style.display = "none";
+        fleetGrid.style.display = "block";
+        //resultDiv.appendChild(fleetGrid);
+      } catch (error) {
+        console.error("Error fetching fleet information:", error);
+        loadingMessage.innerText = "Error fetching fleet information";
+      }
+    }
+
+    async getFleetFuelToken(fleet) {
+      const [token] =
+        await BrowserAnchor.anchor.web3.PublicKey.findProgramAddressSync(
+          [
+            fleet.fuelTank.toBuffer(),
+            window.game.tokenProgramPK.toBuffer(),
+            new solanaWeb3.PublicKey(fuelItem.token).toBuffer(),
+          ],
+          programPK
+        );
+
+      return token;
+    }
+
+    async getFleetAmmoToken(fleet) {
+      const [token] =
+        await BrowserAnchor.anchor.web3.PublicKey.findProgramAddressSync(
+          [
+            fleet.ammoBank.toBuffer(),
+            window.game.tokenProgramPK.toBuffer(),
+            sageGameAcct.account.mints.ammo.toBuffer(),
+          ],
+          programPK
+        );
+
+      return token;
+    }
+
+    async getFleetCargoToken(fleet, tokenPK) {
+      const [token] =
+        await BrowserAnchor.anchor.web3.PublicKey.findProgramAddressSync(
+          [
+            fleet.cargoHold.toBuffer(),
+            window.game.tokenProgramPK.toBuffer(),
+            tokenPK.toBuffer(),
+          ],
+          programPK
+        );
+
+      return token;
+    }
+
+    async handleUndockAll() {
+      for (let i = 0, n = userFleets.length; i < n; i++) {
+        let fleetAcctInfo =
+          await window.blockchainManager.solanaReadConnection.getAccountInfo(
+            userFleets[i].publicKey
+          );
+        let [fleetState, extra] = this.getFleetState(fleetAcctInfo);
+        if (fleetState === "StarbaseLoadingBay") {
+          let starbase = await sageProgram.account.starbase.fetch(
+            extra.starbase
+          );
+          let coords =
+            starbase.sector[0].toNumber() + "," + starbase.sector[1].toNumber();
+          await execUndock(userFleets[i], coords);
+        }
+      }
+    }
+
+    async handleMovement(i, moveDist, moveX, moveY) {
+      debugger;
+      let moveTime = 1;
+      let warpCooldownFinished = 0;
+      let fleetAcctInfo = await window.assistant.getAccountInfo(
+        userFleets[i].label,
+        "full fleet info",
+        userFleets[i].publicKey
+      );
+      let [fleetState, extra] = this.getFleetState(fleetAcctInfo);
+
+      //Fleet idle and needs to be moved?
+      if (
+        fleetState == "Idle" &&
+        extra.length > 1 &&
+        moveDist &&
+        moveX !== null &&
+        moveX !== "" &&
+        moveY != null &&
+        moveY !== ""
+      ) {
+        if (extra[0] !== moveX || extra[1] !== moveY) {
+          let warpCost = calcWarpFuelReq(userFleets[i], extra, [moveX, moveY]);
+          window.logger.cLog(
+            4,
+            `${window.utils.timeUtils.FleetTimeStamp(
+              userFleets[i].label
+            )} warpCost: ${warpCost}`
+          );
+          let subwarpCost = calculateSubwarpFuelBurn(userFleets[i], moveDist);
+          let fleetCurrentFuelTank =
+            await solanaReadConnection.getParsedTokenAccountsByOwner(
+              userFleets[i].fuelTank,
+              { programId: window.game.tokenProgramPK }
+            );
+          let currentFuel = fleetCurrentFuelTank.value.find(
+            (item) =>
+              item.account.data.parsed.info.mint ===
+              sageGameAcct.account.mints.fuel.toString()
+          );
+          let currentFuelCnt = currentFuel
+            ? currentFuel.account.data.parsed.info.tokenAmount.uiAmount
+            : 0;
+
+          let fleetCurrentCargo =
+            await window.blockchainManager.solanaReadConnection.getParsedTokenAccountsByOwner(
+              userFleets[i].cargoHold,
+              { programId: window.game.tokenProgramPK }
+            );
+          let currentCargoFuel = fleetCurrentCargo.value.find(
+            (item) =>
+              item.account.data.parsed.info.mint ===
+              sageGameAcct.account.mints.fuel.toString()
+          );
+          let currentCargoFuelCnt = currentCargoFuel
+            ? currentCargoFuel.account.data.parsed.info.tokenAmount.uiAmount
+            : 0;
+
+          //Should a warp be attempted?
+          if (
+            userFleets[i].moveType == "warp" &&
+            currentFuelCnt + currentCargoFuelCnt >= warpCost
+          ) {
+            let fleetAcctData = sageProgram.coder.accounts.decode(
+              "fleet",
+              fleetAcctInfo.data
+            );
+            let warpCooldownExpiresAt =
+              fleetAcctData.warpCooldownExpiresAt.toNumber() * 1000;
+
+            //Wait for cooldown
+            while (Date.now() < warpCooldownExpiresAt) {
+              if (!userFleets[i].state.includes("Warp C/D")) {
+                const warpCDExpireTimeStr = `[${TimeToStr(
+                  new Date(warpCooldownExpiresAt)
+                )}]`;
+                window.logger.cLog(
+                  1,
+                  `${window.utils.timeUtils.FleetTimeStamp(
+                    userFleets[i].label
+                  )} Awaiting Warp C/D ${warpCDExpireTimeStr}`
+                );
+                updateFleetState(
+                  userFleets[i],
+                  `Warp C/D ${warpCDExpireTimeStr}`
+                );
+              }
+
+              await wait(Math.max(1000, warpCooldownExpiresAt - Date.now()));
+            }
+            await wait(2000); //Extra wait to ensure accuracy
+
+            //Calculate next warp point if more than 1 is needed to arrive at final destination
+            if (moveDist > userFleets[i].maxWarpDistance / 100) {
+              [moveX, moveY] = calcNextWarpPoint(
+                userFleets[i].maxWarpDistance,
+                extra,
+                [moveX, moveY]
+              );
+
+              //Saves temporary waypoints for transports in case the page is refreshed mid-journey while using warp
+              const fleetPK = userFleets[i].publicKey.toString();
+              const fleetSavedData = await GM.getValue(fleetPK, "{}");
+              const fleetParsedData = JSON.parse(fleetSavedData);
+              //window.logger.cLog(3, `${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)} moveTargets`, fleetParsedData.moveTarget, userFleets[i].moveTarget);
+              fleetParsedData.moveTarget = userFleets[i].moveTarget;
+              await GM.setValue(fleetPK, JSON.stringify(fleetParsedData));
+
+              //Update distance based on new warp target
+              moveDist = calculateMovementDistance(extra, [moveX, moveY]);
+            }
+
+            moveTime = calculateWarpTime(userFleets[i], moveDist);
+            const warpResult = await execWarp(
+              userFleets[i],
+              moveX,
+              moveY,
+              moveTime
+            );
+            warpCooldownFinished = warpResult.warpCooldownFinished;
+          } else if (currentFuelCnt + currentCargoFuelCnt >= subwarpCost) {
+            moveTime = calculateSubwarpTime(userFleets[i], moveDist);
+            await execSubwarp(userFleets[i], moveX, moveY, moveTime);
+          } else {
+            window.logger.cLog(
+              1,
+              `${window.utils.timeUtils.FleetTimeStamp(
+                userFleets[i].label
+              )} Unable to move, lack of fuel`
+            );
+            updateFleetState(userFleets[i], "ERROR: Not enough fuel");
+          }
+        }
+      }
+
+      await wait(2000); //Allow time for RPC to update
+      fleetAcctInfo = await window.assistant.getAccountInfo(
+        userFleets[i].label,
+        "full fleet info",
+        userFleets[i].publicKey
+      );
+      [fleetState, extra] = this.getFleetState(fleetAcctInfo);
+      let warpFinish =
+        fleetState == "MoveWarp" ? extra.warpFinish.toNumber() * 1000 : 0;
+      let subwarpFinish =
+        fleetState == "MoveSubwarp" ? extra.arrivalTime.toNumber() * 1000 : 0;
+      let endTime = warpFinish > subwarpFinish ? warpFinish : subwarpFinish;
+
+      const calcEndTime = Date.now() + moveTime * 1000;
       window.logger.cLog(
-        1,
+        3,
         `${window.utils.timeUtils.FleetTimeStamp(
-          fleet.label
-        )} Filling fuel tank: ${amount}`
+          userFleets[i].label
+        )} Expected arrival (chain): ${TimeToStr(new Date(endTime))}`
       );
-      let fuelCargoTypeAcct = cargoTypes.find(
-        (item) =>
-          item.account.mint.toString() == sageGameAcct.account.mints.fuel
-      );
-      const fuelResp = await execCargoFromStarbaseToFleet(
-        fleet,
-        fleet.fuelTank,
-        account,
-        sageGameAcct.account.mints.fuel.toString(),
-        fuelCargoTypeAcct,
-        dockCoords,
-        amount
+      window.logger.cLog(
+        3,
+        `${window.utils.timeUtils.FleetTimeStamp(
+          userFleets[i].label
+        )} Expected arrival (calc): ${TimeToStr(new Date(calcEndTime))}`
       );
 
-      return fuelResp;
+      //Sometimes the chain returns null, use calculated time as fallback
+      if (!endTime) endTime = calcEndTime;
+
+      userFleets[i].moveEnd = endTime;
+      await wait(moveTime * 1000);
+      while (endTime > Date.now()) {
+        const newFleetState = "Move [" + TimeToStr(new Date(endTime)) + "]";
+        updateFleetState(userFleets[i], newFleetState);
+        await wait(Math.max(1000, endTime - Date.now()));
+      }
+
+      //await wait(2000);
+      if (fleetState == "MoveWarp") {
+        await execExitWarp(userFleets[i]);
+      } else if (fleetState == "MoveSubwarp") {
+        await execExitSubwarp(userFleets[i]);
+      }
+
+      fleetAcctInfo = await window.blockchainManager.getAccountInfo(
+        userFleets[i].label,
+        "full fleet info",
+        userFleets[i].publicKey
+      );
+      [fleetState, extra] = this.getFleetState(fleetAcctInfo);
+      if (fleetState == "Idle" && extra) {
+        let targetX =
+          userFleets[i].moveTarget != "" &&
+          userFleets[i].moveTarget.split(",").length > 1
+            ? userFleets[i].moveTarget.split(",")[0].trim()
+            : "";
+        let targetY =
+          userFleets[i].moveTarget != "" &&
+          userFleets[i].moveTarget.split(",").length > 1
+            ? userFleets[i].moveTarget.split(",")[1].trim()
+            : "";
+        if (extra[0] == targetX && extra[1] == targetY) {
+          userFleets[i].moveTarget = [];
+          let fleetSavedData = await GM.getValue(
+            userFleets[i].publicKey.toString(),
+            "{}"
+          );
+          let fleetParsedData = JSON.parse(fleetSavedData);
+          let fleetPK = userFleets[i].publicKey.toString();
+          fleetParsedData.moveTarget = userFleets[i].moveTarget;
+          await GM.setValue(fleetPK, JSON.stringify(fleetParsedData));
+        }
+      }
+
+      return warpCooldownFinished;
     }
 
     async handleTransportRefueling(
@@ -1063,6 +1938,7 @@
       //window.logger.cLog(3,`${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)} Loading finished with ${cargoCnt} total cargo loaded`);
       return !userFleets[i].state.includes("ERROR");
     }
+
     async operateFleet(i) {
       //Don't run fleets in an error state
       if (userFleets[i].state.includes("ERROR")) return;
@@ -1113,7 +1989,7 @@
           "full fleet info",
           userFleets[i].publicKey
         );
-        let [fleetState, extra] = getFleetState(fleetAcctInfo);
+        let [fleetState, extra] = this.getFleetState(fleetAcctInfo);
         window.logger.cLog(
           3,
           `${window.utils.timeUtils.FleetTimeStamp(
@@ -1249,627 +2125,10 @@
         startFleet(i);
       }, 10000 + extraTime);
     }
+
     updateFleetState(fleet, newState) {
       fleet.state = newState;
       window.UserInterface.updateAssistStatus(fleet);
-    }
-    async execExitWarp(fleet) {
-      return new Promise(async (resolve) => {
-        let tx = {
-          instruction: await sageProgram.methods
-            .fleetStateHandler()
-            .accountsStrict({
-              fleet: fleet.publicKey,
-            })
-            .remainingAccounts([
-              {
-                pubkey: userXpAccounts.userPilotingXpAccounts.userPointsAccount,
-                isSigner: false,
-                isWritable: true,
-              },
-              {
-                pubkey: userXpAccounts.userPilotingXpAccounts.pointsCategory,
-                isSigner: false,
-                isWritable: false,
-              },
-              {
-                pubkey:
-                  userXpAccounts.userPilotingXpAccounts.pointsModifierAccount,
-                isSigner: false,
-                isWritable: false,
-              },
-              {
-                pubkey:
-                  userXpAccounts.userCouncilRankXpAccounts.userPointsAccount,
-                isSigner: false,
-                isWritable: true,
-              },
-              {
-                pubkey: userXpAccounts.userCouncilRankXpAccounts.pointsCategory,
-                isSigner: false,
-                isWritable: false,
-              },
-              {
-                pubkey:
-                  userXpAccounts.userCouncilRankXpAccounts
-                    .pointsModifierAccount,
-                isSigner: false,
-                isWritable: false,
-              },
-              {
-                pubkey: userProfileAcct,
-                isSigner: false,
-                isWritable: false,
-              },
-              {
-                pubkey: progressionConfigAcct,
-                isSigner: false,
-                isWritable: false,
-              },
-              {
-                pubkey: sageGameAcct.publicKey,
-                isSigner: false,
-                isWritable: false,
-              },
-              {
-                pubkey: pointsProgramId,
-                isSigner: false,
-                isWritable: false,
-              },
-            ])
-            .instruction(),
-        };
-
-        cLog(1, `${FleetTimeStamp(fleet.label)} Exiting Warp`);
-        updateFleetState(fleet, "Exiting Warp");
-
-        let txResult = await txSignAndSend(tx, fleet, "EXIT WARP");
-
-        cLog(1, `${FleetTimeStamp(fleet.label)} Idle 💤`);
-        updateFleetState(fleet, "Idle");
-
-        resolve(txResult);
-      });
-    }
-
-    async handleUndockAll() {
-      for (let i = 0, n = userFleets.length; i < n; i++) {
-        let fleetAcctInfo =
-          await window.blockchainManager.solanaReadConnection.getAccountInfo(
-            userFleets[i].publicKey
-          );
-        let [fleetState, extra] = getFleetState(fleetAcctInfo);
-        if (fleetState === "StarbaseLoadingBay") {
-          let starbase = await sageProgram.account.starbase.fetch(
-            extra.starbase
-          );
-          let coords =
-            starbase.sector[0].toNumber() + "," + starbase.sector[1].toNumber();
-          await execUndock(userFleets[i], coords);
-        }
-      }
-    }
-
-    async handleMovement(i, moveDist, moveX, moveY) {
-      debugger;
-      let moveTime = 1;
-      let warpCooldownFinished = 0;
-      let fleetAcctInfo = await window.assistant.getAccountInfo(
-        userFleets[i].label,
-        "full fleet info",
-        userFleets[i].publicKey
-      );
-      let [fleetState, extra] = getFleetState(fleetAcctInfo);
-
-      //Fleet idle and needs to be moved?
-      if (
-        fleetState == "Idle" &&
-        extra.length > 1 &&
-        moveDist &&
-        moveX !== null &&
-        moveX !== "" &&
-        moveY != null &&
-        moveY !== ""
-      ) {
-        if (extra[0] !== moveX || extra[1] !== moveY) {
-          let warpCost = calcWarpFuelReq(userFleets[i], extra, [moveX, moveY]);
-          window.logger.cLog(
-            4,
-            `${window.utils.timeUtils.FleetTimeStamp(
-              userFleets[i].label
-            )} warpCost: ${warpCost}`
-          );
-          let subwarpCost = calculateSubwarpFuelBurn(userFleets[i], moveDist);
-          let fleetCurrentFuelTank =
-            await solanaReadConnection.getParsedTokenAccountsByOwner(
-              userFleets[i].fuelTank,
-              { programId: window.game.tokenProgramPK }
-            );
-          let currentFuel = fleetCurrentFuelTank.value.find(
-            (item) =>
-              item.account.data.parsed.info.mint ===
-              sageGameAcct.account.mints.fuel.toString()
-          );
-          let currentFuelCnt = currentFuel
-            ? currentFuel.account.data.parsed.info.tokenAmount.uiAmount
-            : 0;
-
-          let fleetCurrentCargo =
-            await window.blockchainManager.solanaReadConnection.getParsedTokenAccountsByOwner(
-              userFleets[i].cargoHold,
-              { programId: window.game.tokenProgramPK }
-            );
-          let currentCargoFuel = fleetCurrentCargo.value.find(
-            (item) =>
-              item.account.data.parsed.info.mint ===
-              sageGameAcct.account.mints.fuel.toString()
-          );
-          let currentCargoFuelCnt = currentCargoFuel
-            ? currentCargoFuel.account.data.parsed.info.tokenAmount.uiAmount
-            : 0;
-
-          //Should a warp be attempted?
-          if (
-            userFleets[i].moveType == "warp" &&
-            currentFuelCnt + currentCargoFuelCnt >= warpCost
-          ) {
-            let fleetAcctData = sageProgram.coder.accounts.decode(
-              "fleet",
-              fleetAcctInfo.data
-            );
-            let warpCooldownExpiresAt =
-              fleetAcctData.warpCooldownExpiresAt.toNumber() * 1000;
-
-            //Wait for cooldown
-            while (Date.now() < warpCooldownExpiresAt) {
-              if (!userFleets[i].state.includes("Warp C/D")) {
-                const warpCDExpireTimeStr = `[${TimeToStr(
-                  new Date(warpCooldownExpiresAt)
-                )}]`;
-                window.logger.cLog(
-                  1,
-                  `${window.utils.timeUtils.FleetTimeStamp(
-                    userFleets[i].label
-                  )} Awaiting Warp C/D ${warpCDExpireTimeStr}`
-                );
-                updateFleetState(
-                  userFleets[i],
-                  `Warp C/D ${warpCDExpireTimeStr}`
-                );
-              }
-
-              await wait(Math.max(1000, warpCooldownExpiresAt - Date.now()));
-            }
-            await wait(2000); //Extra wait to ensure accuracy
-
-            //Calculate next warp point if more than 1 is needed to arrive at final destination
-            if (moveDist > userFleets[i].maxWarpDistance / 100) {
-              [moveX, moveY] = calcNextWarpPoint(
-                userFleets[i].maxWarpDistance,
-                extra,
-                [moveX, moveY]
-              );
-
-              //Saves temporary waypoints for transports in case the page is refreshed mid-journey while using warp
-              const fleetPK = userFleets[i].publicKey.toString();
-              const fleetSavedData = await GM.getValue(fleetPK, "{}");
-              const fleetParsedData = JSON.parse(fleetSavedData);
-              //window.logger.cLog(3, `${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)} moveTargets`, fleetParsedData.moveTarget, userFleets[i].moveTarget);
-              fleetParsedData.moveTarget = userFleets[i].moveTarget;
-              await GM.setValue(fleetPK, JSON.stringify(fleetParsedData));
-
-              //Update distance based on new warp target
-              moveDist = calculateMovementDistance(extra, [moveX, moveY]);
-            }
-
-            moveTime = calculateWarpTime(userFleets[i], moveDist);
-            const warpResult = await execWarp(
-              userFleets[i],
-              moveX,
-              moveY,
-              moveTime
-            );
-            warpCooldownFinished = warpResult.warpCooldownFinished;
-          } else if (currentFuelCnt + currentCargoFuelCnt >= subwarpCost) {
-            moveTime = calculateSubwarpTime(userFleets[i], moveDist);
-            await execSubwarp(userFleets[i], moveX, moveY, moveTime);
-          } else {
-            window.logger.cLog(
-              1,
-              `${window.utils.timeUtils.FleetTimeStamp(
-                userFleets[i].label
-              )} Unable to move, lack of fuel`
-            );
-            updateFleetState(userFleets[i], "ERROR: Not enough fuel");
-          }
-        }
-      }
-
-      await wait(2000); //Allow time for RPC to update
-      fleetAcctInfo = await window.assistant.getAccountInfo(
-        userFleets[i].label,
-        "full fleet info",
-        userFleets[i].publicKey
-      );
-      [fleetState, extra] = getFleetState(fleetAcctInfo);
-      let warpFinish =
-        fleetState == "MoveWarp" ? extra.warpFinish.toNumber() * 1000 : 0;
-      let subwarpFinish =
-        fleetState == "MoveSubwarp" ? extra.arrivalTime.toNumber() * 1000 : 0;
-      let endTime = warpFinish > subwarpFinish ? warpFinish : subwarpFinish;
-
-      const calcEndTime = Date.now() + moveTime * 1000;
-      window.logger.cLog(
-        3,
-        `${window.utils.timeUtils.FleetTimeStamp(
-          userFleets[i].label
-        )} Expected arrival (chain): ${TimeToStr(new Date(endTime))}`
-      );
-      window.logger.cLog(
-        3,
-        `${window.utils.timeUtils.FleetTimeStamp(
-          userFleets[i].label
-        )} Expected arrival (calc): ${TimeToStr(new Date(calcEndTime))}`
-      );
-
-      //Sometimes the chain returns null, use calculated time as fallback
-      if (!endTime) endTime = calcEndTime;
-
-      userFleets[i].moveEnd = endTime;
-      await wait(moveTime * 1000);
-      while (endTime > Date.now()) {
-        const newFleetState = "Move [" + TimeToStr(new Date(endTime)) + "]";
-        updateFleetState(userFleets[i], newFleetState);
-        await wait(Math.max(1000, endTime - Date.now()));
-      }
-
-      //await wait(2000);
-      if (fleetState == "MoveWarp") {
-        await execExitWarp(userFleets[i]);
-      } else if (fleetState == "MoveSubwarp") {
-        await execExitSubwarp(userFleets[i]);
-      }
-
-      fleetAcctInfo = await window.blockchainManager.getAccountInfo(
-        userFleets[i].label,
-        "full fleet info",
-        userFleets[i].publicKey
-      );
-      [fleetState, extra] = getFleetState(fleetAcctInfo);
-      if (fleetState == "Idle" && extra) {
-        let targetX =
-          userFleets[i].moveTarget != "" &&
-          userFleets[i].moveTarget.split(",").length > 1
-            ? userFleets[i].moveTarget.split(",")[0].trim()
-            : "";
-        let targetY =
-          userFleets[i].moveTarget != "" &&
-          userFleets[i].moveTarget.split(",").length > 1
-            ? userFleets[i].moveTarget.split(",")[1].trim()
-            : "";
-        if (extra[0] == targetX && extra[1] == targetY) {
-          userFleets[i].moveTarget = [];
-          let fleetSavedData = await GM.getValue(
-            userFleets[i].publicKey.toString(),
-            "{}"
-          );
-          let fleetParsedData = JSON.parse(fleetSavedData);
-          let fleetPK = userFleets[i].publicKey.toString();
-          fleetParsedData.moveTarget = userFleets[i].moveTarget;
-          await GM.setValue(fleetPK, JSON.stringify(fleetParsedData));
-        }
-      }
-
-      return warpCooldownFinished;
-    }
-    getFleetState(fleetAcctInfo) {
-      let remainingData = fleetAcctInfo.data.subarray(439);
-      let fleetState = "Unknown";
-      let extra = null;
-      switch (remainingData[0]) {
-        case 0:
-          fleetState = "StarbaseLoadingBay";
-          extra = sageProgram.coder.types.decode(
-            "StarbaseLoadingBay",
-            remainingData.subarray(1)
-          );
-          break;
-        case 1: {
-          fleetState = "Idle";
-          let sector = sageProgram.coder.types.decode(
-            "Idle",
-            remainingData.subarray(1)
-          );
-          extra = [sector.sector[0].toNumber(), sector.sector[1].toNumber()];
-          break;
-        }
-        case 2:
-          fleetState = "MineAsteroid";
-          extra = sageProgram.coder.types.decode(
-            "MineAsteroid",
-            remainingData.subarray(1)
-          );
-          break;
-        case 3:
-          fleetState = "MoveWarp";
-          extra = sageProgram.coder.types.decode(
-            "MoveWarp",
-            remainingData.subarray(1)
-          );
-          break;
-        case 4:
-          fleetState = "MoveSubwarp";
-          extra = sageProgram.coder.types.decode(
-            "MoveSubwarp",
-            remainingData.subarray(1)
-          );
-          break;
-        case 5:
-          fleetState = "Respawn";
-          break;
-        case 6:
-          fleetState = "StarbaseUpgrade";
-          break;
-        case 7:
-          fleetState = "ReadyToExitWarp";
-          break;
-      }
-      return [fleetState, extra];
-    }
-
-    calculateMovementDistance(orig, dest) {
-      return dest
-        ? Math.sqrt((orig[0] - dest[0]) ** 2 + (orig[1] - dest[1]) ** 2)
-        : 0;
-    }
-
-    calculateWarpTime(fleet, distance) {
-      return fleet.warpSpeed > 0 ? distance / (fleet.warpSpeed / 1e6) : 0;
-    }
-
-    calcNextWarpPoint(warpRange, startCoords, endCoords) {
-      const [startX, startY] = [Number(startCoords[0]), Number(startCoords[1])];
-      const [endX, endY] = [Number(endCoords[0]), Number(endCoords[1])];
-      const moveDist = calculateMovementDistance(
-        [startX, startY],
-        [endX, endY]
-      );
-      const realWarpRange = warpRange / 100;
-      const warpCount = realWarpRange > 0 ? moveDist / realWarpRange : 1;
-
-      if (warpCount < 1) return endCoords; //In range for single jump?
-
-      //Calculate raw distance
-      let dx = (endX - startX) / warpCount;
-      let dy = (endY - startY) / warpCount;
-
-      //Refine distance
-      dx = dx > 0 ? Math.floor(dx) : Math.ceil(dx);
-      dy = dy > 0 ? Math.floor(dy) : Math.ceil(dy);
-
-      //Calculate and return waypoint coordinates
-      return [startX + dx, startY + dy];
-    }
-
-    calcWarpFuelReq(fleet, startCoords, endCoords) {
-      if (!CoordsValid(startCoords) || !CoordsValid(endCoords)) {
-        window.logger.cLog(
-          4,
-          `${window.utils.timeUtils.FleetTimeStamp(
-            fleet.label
-          )} calcWarpFuelReq: Bad coords`,
-          startCoords,
-          endCoords
-        );
-        return 0;
-      }
-      if (CoordsEqual(startCoords, endCoords)) {
-        window.logger.cLog(
-          4,
-          `${window.utils.timeUtils.FleetTimeStamp(
-            fleet.label
-          )} calcWarpFuelReq: Same coords`,
-          startCoords,
-          endCoords
-        );
-        return 0;
-      }
-
-      const [startX, startY] = [Number(startCoords[0]), Number(startCoords[1])];
-
-      let jumps = 0;
-      let fuelRequired = 0;
-      let curWP = [startX, startY];
-
-      while (!CoordsEqual(curWP, endCoords)) {
-        const nextWP = calcNextWarpPoint(
-          fleet.maxWarpDistance,
-          curWP,
-          endCoords
-        );
-        const distance = calculateMovementDistance(curWP, nextWP);
-        fuelRequired += Math.ceil(
-          distance * (fleet.warpFuelConsumptionRate / 100)
-        );
-        curWP = nextWP;
-        jumps++;
-      }
-
-      //window.logger.cLog(4, `${window.utils.timeUtils.FleetTimeStamp(fleet.label)} calcWarpFuelReq: ${fuelRequired} fuel over ${jumps} jumps`);
-      return fuelRequired;
-    }
-
-    calculateSubwarpTime(fleet, distance) {
-      return fleet.subwarpSpeed > 0 ? distance / (fleet.subwarpSpeed / 1e6) : 0;
-    }
-
-    calculateSubwarpFuelBurn(fleet, distance) {
-      return distance * (fleet.subwarpFuelConsumptionRate / 100);
-    }
-
-    async getFleetCntAtCoords() {
-      let gridSizeElem = document.querySelector("#fleetGridSelect");
-      let gridSize = gridSizeElem.value;
-      let targetCoordsElem = document.querySelector("#checkFleetCntInput");
-      let targetCoords = targetCoordsElem.value;
-      let fleetGrid = document.querySelector("#fleetGrid");
-      let loadingMessage = document.querySelector("#loadingMessage");
-      if (!targetCoords || targetCoords.trim() === "") {
-        loadingMessage.innerText =
-          "Please enter target coordinates for grid center.";
-        loadingMessage.style.display = "block";
-        fleetGrid.style.display = "none";
-        return; // Stop further processing since input is empty or idle
-      }
-      let [x, y] = targetCoords
-        .split(",")
-        .map((coord) => parseInt(coord.trim()));
-
-      fleetGrid.innerHTML = ""; // Clear previous results
-
-      try {
-        loadingMessage.innerText = "Loading...";
-        loadingMessage.style.display = "block";
-        fleetGrid.style.display = "none";
-
-        for (let i = 0; i < gridSize; i++) {
-          let row = fleetGrid.insertRow();
-          for (let j = 0; j < gridSize; j++) {
-            let coordX = x + j - Math.floor(gridSize / 2); // Adjusted for column-first population
-            let coordY = y + (gridSize - 1) - i - Math.floor(gridSize / 2); // Adjusted for descending y value
-
-            let xBN = new BrowserAnchor.anchor.BN(coordX);
-            let xArr = xBN
-              .toTwos(64)
-              .toArrayLike(BrowserBuffer.Buffer.Buffer, "le", 8);
-            let x58 = bs58.encode(xArr);
-
-            let yBN = new BrowserAnchor.anchor.BN(coordY);
-            let yArr = yBN
-              .toTwos(64)
-              .toArrayLike(BrowserBuffer.Buffer.Buffer, "le", 8);
-            let y58 = bs58.encode(yArr);
-
-            let fleetAccts =
-              await window.blockchainManager.solanaReadConnection.getProgramAccounts(
-                sageProgramPK,
-                {
-                  filters: [
-                    { memcmp: { offset: 415, bytes: x58 } },
-                    { memcmp: { offset: 423, bytes: y58 } },
-                  ],
-                }
-              );
-
-            let cell = row.insertCell(j);
-            // Create a div to hold the content for formatting
-            let contentDiv = document.createElement("div");
-            contentDiv.style.textAlign = "center";
-
-            // Set the content of the div (coordinates and fleet count)
-            contentDiv.innerHTML = `<div>[${coordX},${coordY}]</div><div>${fleetAccts.length}</div>`;
-
-            // Calculate gradient color based on fleetAccts.length
-            const gradientColor = calculateGradientColor(fleetAccts.length);
-
-            // Apply background gradient
-            cell.style.background = gradientColor;
-
-            // Apply border style
-            cell.style.border = "2px solid rgb(255, 190, 77)";
-            cell.style.borderRadius = "8px";
-            cell.style.padding = "9px"; // Adjust padding to maintain inner content space
-            cell.style.position = "relative";
-
-            // Append the content div to the cell
-            cell.appendChild(contentDiv);
-
-            // Add a green Unicode circle if fleet count is below 5
-            if (fleetAccts.length < 5) {
-              const greenCircle = document.createElement("div");
-              greenCircle.style.position = "absolute";
-              greenCircle.style.bottom = "-3px";
-              greenCircle.style.right = "0px";
-              greenCircle.style.fontSize = "20px";
-              greenCircle.innerHTML = "&#9679;"; // Unicode circle
-              greenCircle.style.color = "rgb(0, 255, 0, 1)";
-              greenCircle.style.opacity = "1.0";
-              cell.appendChild(greenCircle);
-            }
-
-            // Function to calculate gradient color
-            function calculateGradientColor(fleetCount) {
-              const maxFleetCount = 25; // Maximum fleet count for the hottest color
-              const minFleetCount = 0; // Minimum fleet count for the coolest color
-
-              // Map the fleet count to an RGB value (blue to red gradient)
-              const r = Math.floor((fleetCount / maxFleetCount) * 255);
-              const g = 0;
-              const b = Math.floor(
-                ((maxFleetCount - fleetCount) / maxFleetCount) * 255
-              );
-
-              // Calculate the gradient direction based on fleet count (0 degrees for cool to 90 degrees for hot)
-              const gradientDirection = 0 + (fleetCount / maxFleetCount) * 90;
-
-              // Adjust the gradient direction by 180 degrees to place it at the bottom
-              const adjustedGradientDirection = gradientDirection - 45;
-
-              // Construct the gradient CSS with stops from 0% to 50% for the color and 50% to 100% for transparent
-              return `linear-gradient(${adjustedGradientDirection}deg, rgba(${r}, ${g}, ${b}, 1) 0%, rgba(${r}, ${g}, ${b}, 0) 50%, rgba(${r}, ${g}, ${b}, 0) 100%)`;
-            }
-          }
-        }
-
-        loadingMessage.style.display = "none";
-        fleetGrid.style.display = "block";
-        //resultDiv.appendChild(fleetGrid);
-      } catch (error) {
-        console.error("Error fetching fleet information:", error);
-        loadingMessage.innerText = "Error fetching fleet information";
-      }
-    }
-
-    async getFleetFuelToken(fleet) {
-      const [token] =
-        await BrowserAnchor.anchor.web3.PublicKey.findProgramAddressSync(
-          [
-            fleet.fuelTank.toBuffer(),
-            window.game.tokenProgramPK.toBuffer(),
-            new solanaWeb3.PublicKey(fuelItem.token).toBuffer(),
-          ],
-          programPK
-        );
-
-      return token;
-    }
-
-    async getFleetAmmoToken(fleet) {
-      const [token] =
-        await BrowserAnchor.anchor.web3.PublicKey.findProgramAddressSync(
-          [
-            fleet.ammoBank.toBuffer(),
-            window.game.tokenProgramPK.toBuffer(),
-            sageGameAcct.account.mints.ammo.toBuffer(),
-          ],
-          programPK
-        );
-
-      return token;
-    }
-
-    async getFleetCargoToken(fleet, tokenPK) {
-      const [token] =
-        await BrowserAnchor.anchor.web3.PublicKey.findProgramAddressSync(
-          [
-            fleet.cargoHold.toBuffer(),
-            window.game.tokenProgramPK.toBuffer(),
-            tokenPK.toBuffer(),
-          ],
-          programPK
-        );
-
-      return token;
     }
   }
 
@@ -2184,7 +2443,9 @@
             "Full Account Info",
             fleet.publicKey
           );
-          let [fleetState, extra] = getFleetState(fleetAcctInfo);
+          let [fleetState, extra] = await window.Fleet.getFleetState(
+            fleetAcctInfo
+          );
           let fleetCoords = fleetState == "Idle" && extra ? extra : [];
           let fleetScanBlockIdx = 0;
           userFleets.push({
@@ -5304,7 +5565,7 @@
             "full fleet info",
             userFleets[i].publicKey
           );
-          const [fleetState, extra] = getFleetState(fleetAcctInfo);
+          const [fleetState, extra] = window.Fleet.getFleetState(fleetAcctInfo);
           window.logger.cLog(
             4,
             `${window.utils.timeUtils.FleetTimeStamp(
