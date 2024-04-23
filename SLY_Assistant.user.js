@@ -91,7 +91,7 @@
     }
 
     async getAccountInfo(fleetName, reason, params) {
-      window.logger.cLog(3, `${FleetTimeStamp(fleetName)} get ${reason}`);
+      window.logger.cLog(3, `${window.utils.timeUtils.FleetTimeStamp(fleetName)} get ${reason}`);
       return await window.blockchainManager.getAccountInfo(params);
     }
   }
@@ -290,7 +290,7 @@
       });
       window.logger.cLog(
         3,
-        `${FleetTimeStamp(fleet.label)} <${opName}> txHash`,
+        `${window.utils.timeUtils.FleetTimeStamp(fleet.label)} <${opName}> txHash`,
         txHash
       );
 
@@ -307,7 +307,7 @@
         } else if (signatureStatus.err) {
           window.logger.cLog(
             3,
-            `${FleetTimeStamp(fleet.label)} <${opName}> Err`,
+            `${window.utils.timeUtils.FleetTimeStamp(fleet.label)} <${opName}> Err`,
             signatureStatus.err
           );
           return { txHash, confirmation: signatureStatus };
@@ -323,7 +323,7 @@
       debugger;
       window.logger.cLog(
         3,
-        `${FleetTimeStamp(fleet.label)} <${opName}> TRYING 🌐`
+        `${window.utils.timeUtils.FleetTimeStamp(fleet.label)} <${opName}> TRYING 🌐`
       );
       return await sendAndConfirmTx(
         txSerialized,
@@ -355,7 +355,7 @@
             : 0; //Convert Lamports to microLamports ?
           window.logger.cLog(
             4,
-            `${FleetTimeStamp(fleetName)} <${opName}> 💳 Fee ${Math.ceil(
+            `${window.utils.timeUtils.FleetTimeStamp(fleetName)} <${opName}> 💳 Fee ${Math.ceil(
               priorityFee / 5
             )} lamp`
           );
@@ -411,7 +411,7 @@
           let microOpStart = Date.now();
           window.logger.cLog(
             2,
-            `${FleetTimeStamp(fleetName)} <${opName}> SEND ➡️`
+            `${window.utils.timeUtils.FleetTimeStamp(fleetName)} <${opName}> SEND ➡️`
           );
           let response = await this.sendAndConfirmTx(
             txSerialized,
@@ -441,7 +441,7 @@
             updateFleetState(fleet, "ERROR: Ix Error");
             window.logger.cLog(
               2,
-              `${FleetTimeStamp(
+              `${window.utils.timeUtils.FleetTimeStamp(
                 fleetName
               )} <${opName}> ERROR ❌ The instruction resulted in an error.`
             );
@@ -461,13 +461,13 @@
           ) {
             window.logger.cLog(
               2,
-              `${FleetTimeStamp(
+              `${window.utils.timeUtils.FleetTimeStamp(
                 fleetName
               )} <${opName}> CONFIRM ❌ ${confirmationTimeStr}`
             );
             window.logger.cLog(
               2,
-              `${FleetTimeStamp(fleetName)} <${opName}> RESEND 🔂`
+              `${window.utils.timeUtils.FleetTimeStamp(fleetName)} <${opName}> RESEND 🔂`
             );
             continue; //retart loop to try again
           }
@@ -491,12 +491,12 @@
           if (tryCount > 1)
             window.logger.cLog(
               3,
-              `${FleetTimeStamp(fleetName)} Got txResult in ${tryCount} tries`,
+              `${window.utils.timeUtils.FleetTimeStamp(fleetName)} Got txResult in ${tryCount} tries`,
               txResult
             );
           window.logger.cLog(
             2,
-            `${FleetTimeStamp(
+            `${window.utils.timeUtils.FleetTimeStamp(
               fleetName
             )} <${opName}> CONFIRM ✅ ${confirmationTimeStr}`
           );
@@ -506,7 +506,7 @@
           const secondsTaken = Math.round(fullMsTaken / 1000);
           window.logger.cLog(
             1,
-            `${FleetTimeStamp(
+            `${window.utils.timeUtils.FleetTimeStamp(
               fleetName
             )} <${opName}> Completed 🏁 ${secondsTaken}s`
           );
@@ -598,7 +598,7 @@
           if (Date.now() - foo > 600000) {
             window.logger.cLog(
               3,
-              `${FleetTimeStamp(userFleets[i].label)} Unresponsive`,
+              `${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)} Unresponsive`,
               foo ? TimeToStr(new Date(foo)) : "null",
               fleet.lastOp ? TimeToStr(new Date(fleet.lastOp)) : "null",
               fleet.scanEnd ? TimeToStr(new Date(fleet.scanEnd)) : "null",
@@ -648,7 +648,7 @@
         ? token.account.data.parsed.info.tokenAmount.uiAmount
         : 0;
 
-      //window.logger.cLog(4, `${FleetTimeStamp(fleet.label)} getFleetFuelData -> calcWarpFuelReq:`, currentPos, targetPos);
+      //window.logger.cLog(4, `${window.utils.timeUtils.FleetTimeStamp(fleet.label)} getFleetFuelData -> calcWarpFuelReq:`, currentPos, targetPos);
       return {
         account,
         token,
@@ -662,7 +662,7 @@
     async fuelFleet(fleet, dockCoords, account, amount) {
       window.logger.cLog(
         1,
-        `${FleetTimeStamp(fleet.label)} Filling fuel tank: ${amount}`
+        `${window.utils.timeUtils.FleetTimeStamp(fleet.label)} Filling fuel tank: ${amount}`
       );
       let fuelCargoTypeAcct = cargoTypes.find(
         (item) =>
@@ -690,7 +690,7 @@
       amountToDropOff = 0,
       transportManifest
     ) {
-      window.logger.cLog(1, `${FleetTimeStamp(fleet.label)} ⛽ Refueling`);
+      window.logger.cLog(1, `${window.utils.timeUtils.FleetTimeStamp(fleet.label)} ⛽ Refueling`);
       updateFleetState(fleet, "Refueling");
       let fuelResp = { status: 0, detail: "", amount: 0 };
 
@@ -709,7 +709,7 @@
       if (fuelNeeded > fuelData.capacity) {
         window.logger.cLog(
           1,
-          `${FleetTimeStamp(
+          `${window.utils.timeUtils.FleetTimeStamp(
             fleet.label
           )} ERROR: Fuel tank too small for round trip`
         );
@@ -725,23 +725,23 @@
       const extraFuel = Math.floor(fuelData.amount - fuelNeeded);
       window.logger.cLog(
         2,
-        `${FleetTimeStamp(fleet.label)} Current Fuel: ${fuelData.amount}`
+        `${window.utils.timeUtils.FleetTimeStamp(fleet.label)} Current Fuel: ${fuelData.amount}`
       );
       window.logger.cLog(
         2,
-        `${FleetTimeStamp(fleet.label)} Warp Cost: ${fuelData.warpCost}`
+        `${window.utils.timeUtils.FleetTimeStamp(fleet.label)} Warp Cost: ${fuelData.warpCost}`
       );
       window.logger.cLog(
         2,
-        `${FleetTimeStamp(fleet.label)} Subwarp Cost: ${fuelData.subwarpCost}`
+        `${window.utils.timeUtils.FleetTimeStamp(fleet.label)} Subwarp Cost: ${fuelData.subwarpCost}`
       );
       window.logger.cLog(
         2,
-        `${FleetTimeStamp(fleet.label)} Fuel To Transport: ${fuelEntry.amt}`
+        `${window.utils.timeUtils.FleetTimeStamp(fleet.label)} Fuel To Transport: ${fuelEntry.amt}`
       );
       window.logger.cLog(
         2,
-        `${FleetTimeStamp(fleet.label)} Extra Fuel: ${extraFuel}`
+        `${window.utils.timeUtils.FleetTimeStamp(fleet.label)} Extra Fuel: ${extraFuel}`
       );
 
       //Unload extra fuel from tank
@@ -750,7 +750,7 @@
         if (fuelToUnload > 0) {
           window.logger.cLog(
             1,
-            `${FleetTimeStamp(
+            `${window.utils.timeUtils.FleetTimeStamp(
               fleet.label
             )} Unloading extra fuel: ${fuelToUnload}`
           );
@@ -787,7 +787,7 @@
       if (execResp && execResp.name == "NotEnoughResource") {
         window.logger.cLog(
           1,
-          `${FleetTimeStamp(fleet.label)} ERROR: Not enough fuel`
+          `${window.utils.timeUtils.FleetTimeStamp(fleet.label)} ERROR: Not enough fuel`
         );
         fuelResp.detail = "ERROR: Not enough fuel";
       } else {
@@ -801,7 +801,7 @@
     async handleTransportUnloading(fleet, starbaseCoord, transportManifest) {
       window.logger.cLog(
         1,
-        `${FleetTimeStamp(fleet.label)} 🚚 Unloading Transport`
+        `${window.utils.timeUtils.FleetTimeStamp(fleet.label)} 🚚 Unloading Transport`
       );
       updateFleetState(fleet, "Unloading");
 
@@ -833,7 +833,7 @@
           if (amountToUnload > 0) {
             window.logger.cLog(
               1,
-              `${FleetTimeStamp(fleet.label)} Unloading ${amountToUnload} ${
+              `${window.utils.timeUtils.FleetTimeStamp(fleet.label)} Unloading ${amountToUnload} ${
                 entry.res
               }`
             );
@@ -849,7 +849,7 @@
           } else {
             window.logger.cLog(
               1,
-              `${FleetTimeStamp(fleet.label)} Unload ${
+              `${window.utils.timeUtils.FleetTimeStamp(fleet.label)} Unload ${
                 entry.res
               } skipped - none found in ship's cargo hold`
             );
@@ -879,7 +879,7 @@
         if (ammoToUnload > 0) {
           window.logger.cLog(
             1,
-            `${FleetTimeStamp(
+            `${window.utils.timeUtils.FleetTimeStamp(
               fleet.label
             )} Unloading Ammobanks: ${ammoToUnload}`
           );
@@ -899,7 +899,7 @@
     async handleTransportLoading(i, starbaseCoords, transportManifest) {
       window.logger.cLog(
         1,
-        `${FleetTimeStamp(userFleets[i].label)} 📦 Loading Transport`
+        `${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)} 📦 Loading Transport`
       );
       updateFleetState(userFleets[i], "Loading");
 
@@ -916,7 +916,7 @@
       //Calculate remaining free cargo space
       window.logger.cLog(
         2,
-        `${FleetTimeStamp(userFleets[i].label)} Calculating cargoSpace ...`
+        `${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)} Calculating cargoSpace ...`
       );
       const fleetCurrentCargo =
         await window.blockchainManager.solanaReadConnection.getParsedTokenAccountsByOwner(
@@ -934,7 +934,7 @@
       let cargoSpace = userFleets[i].cargoCapacity - cargoCnt;
       window.logger.cLog(
         2,
-        `${FleetTimeStamp(
+        `${window.utils.timeUtils.FleetTimeStamp(
           userFleets[i].label
         )} cargoSpace remaining: ${cargoSpace}`
       );
@@ -948,7 +948,7 @@
           ) {
             window.logger.cLog(
               1,
-              `${FleetTimeStamp(
+              `${window.utils.timeUtils.FleetTimeStamp(
                 userFleets[i].label
               )} Cargo full - remaining loading process skipped`
             );
@@ -984,7 +984,7 @@
           if (resMax > 0) {
             window.logger.cLog(
               1,
-              `${FleetTimeStamp(
+              `${window.utils.timeUtils.FleetTimeStamp(
                 userFleets[i].label
               )} Attempting to load ${resMax} ${
                 entry.res
@@ -1007,7 +1007,7 @@
               ).name;
               window.logger.cLog(
                 1,
-                `${FleetTimeStamp(userFleets[i].label)} Not enough ${resShort}`
+                `${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)} Not enough ${resShort}`
               );
             }
           }
@@ -1018,7 +1018,7 @@
       //const fleetCurrentCargo = await window.blockchainManager.solanaReadConnection.getParsedTokenAccountsByOwner(userFleets[i].cargoHold, {programId: window.game.tokenProgramPK});
       //const cargoCnt = fleetCurrentCargo.value.reduce((n, {account}) => n + account.data.parsed.info.tokenAmount.uiAmount, 0);
 
-      //window.logger.cLog(3,`${FleetTimeStamp(userFleets[i].label)} Loading finished with ${cargoCnt} total cargo loaded`);
+      //window.logger.cLog(3,`${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)} Loading finished with ${cargoCnt} total cargo loaded`);
       return !userFleets[i].state.includes("ERROR");
     }
     async operateFleet(i) {
@@ -1043,7 +1043,7 @@
       if (moving)
         window.logger.cLog(
           2,
-          `${FleetTimeStamp(userFleets[i].label)} Operating moving fleet`
+          `${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)} Operating moving fleet`
         );
       if (userFleets[i].resupplying || mining) return;
       if (!onTarget && waitingForWarpCD) return;
@@ -1060,7 +1060,7 @@
         userFleets[i].iterCnt++;
         window.logger.cLog(
           2,
-          `${FleetTimeStamp(userFleets[i].label)} <getAccountInfo> (${
+          `${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)} <getAccountInfo> (${
             userFleets[i].state
           })`
         );
@@ -1072,7 +1072,7 @@
         let [fleetState, extra] = getFleetState(fleetAcctInfo);
         window.logger.cLog(
           3,
-          `${FleetTimeStamp(
+          `${window.utils.timeUtils.FleetTimeStamp(
             userFleets[i].label
           )} chain fleet state: ${fleetState}`
         );
@@ -1084,7 +1084,7 @@
         if (moving && fleetState == "Idle") {
           window.logger.cLog(
             1,
-            `${FleetTimeStamp(
+            `${window.utils.timeUtils.FleetTimeStamp(
               userFleets[i].label
             )} Fleet State Mismatch - Updating from ${
               userFleets[i].state
@@ -1103,7 +1103,7 @@
         } else if (fleetState == "MoveWarp" || fleetState == "MoveSubwarp") {
           window.logger.cLog(
             2,
-            `${FleetTimeStamp(userFleets[i].label)} executing handleMovement`
+            `${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)} executing handleMovement`
           );
           await handleMovement(i, null, null, null);
         } else if (
@@ -1129,7 +1129,7 @@
           ) {
             window.logger.cLog(
               1,
-              `${FleetTimeStamp(
+              `${window.utils.timeUtils.FleetTimeStamp(
                 userFleets[i].label
               )} Fleet State Mismatch - Updating to Mining again`
             );
@@ -1145,7 +1145,7 @@
       } catch (err) {
         window.logger.cLog(
           1,
-          `${FleetTimeStamp(userFleets[i].label)} ERROR`,
+          `${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)} ERROR`,
           err
         );
       }
@@ -1159,7 +1159,7 @@
       const fleet = userFleets[i];
 
       try {
-        //window.logger.cLog(1,`${FleetTimeStamp(userFleets[i].label)} Operating fleet ...`);
+        //window.logger.cLog(1,`${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)} Operating fleet ...`);
         const fleetSavedData = await GM.getValue(
           fleet.publicKey.toString(),
           "{}"
@@ -1188,7 +1188,7 @@
         extraTime = 20000;
         window.logger.cLog(
           1,
-          `${FleetTimeStamp(fleet.label)} Uncaught error - waiting 20s longer`,
+          `${window.utils.timeUtils.FleetTimeStamp(fleet.label)} Uncaught error - waiting 20s longer`,
           error
         );
 
@@ -1248,7 +1248,7 @@
           let warpCost = calcWarpFuelReq(userFleets[i], extra, [moveX, moveY]);
           window.logger.cLog(
             4,
-            `${FleetTimeStamp(userFleets[i].label)} warpCost: ${warpCost}`
+            `${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)} warpCost: ${warpCost}`
           );
           let subwarpCost = calculateSubwarpFuelBurn(userFleets[i], moveDist);
           let fleetCurrentFuelTank =
@@ -1299,7 +1299,7 @@
                 )}]`;
                 window.logger.cLog(
                   1,
-                  `${FleetTimeStamp(
+                  `${window.utils.timeUtils.FleetTimeStamp(
                     userFleets[i].label
                   )} Awaiting Warp C/D ${warpCDExpireTimeStr}`
                 );
@@ -1325,7 +1325,7 @@
               const fleetPK = userFleets[i].publicKey.toString();
               const fleetSavedData = await GM.getValue(fleetPK, "{}");
               const fleetParsedData = JSON.parse(fleetSavedData);
-              //window.logger.cLog(3, `${FleetTimeStamp(userFleets[i].label)} moveTargets`, fleetParsedData.moveTarget, userFleets[i].moveTarget);
+              //window.logger.cLog(3, `${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)} moveTargets`, fleetParsedData.moveTarget, userFleets[i].moveTarget);
               fleetParsedData.moveTarget = userFleets[i].moveTarget;
               await GM.setValue(fleetPK, JSON.stringify(fleetParsedData));
 
@@ -1347,7 +1347,7 @@
           } else {
             window.logger.cLog(
               1,
-              `${FleetTimeStamp(
+              `${window.utils.timeUtils.FleetTimeStamp(
                 userFleets[i].label
               )} Unable to move, lack of fuel`
             );
@@ -1372,13 +1372,13 @@
       const calcEndTime = Date.now() + moveTime * 1000;
       window.logger.cLog(
         3,
-        `${FleetTimeStamp(
+        `${window.utils.timeUtils.FleetTimeStamp(
           userFleets[i].label
         )} Expected arrival (chain): ${TimeToStr(new Date(endTime))}`
       );
       window.logger.cLog(
         3,
-        `${FleetTimeStamp(
+        `${window.utils.timeUtils.FleetTimeStamp(
           userFleets[i].label
         )} Expected arrival (calc): ${TimeToStr(new Date(calcEndTime))}`
       );
@@ -1526,7 +1526,7 @@
       if (!CoordsValid(startCoords) || !CoordsValid(endCoords)) {
         window.logger.cLog(
           4,
-          `${FleetTimeStamp(fleet.label)} calcWarpFuelReq: Bad coords`,
+          `${window.utils.timeUtils.FleetTimeStamp(fleet.label)} calcWarpFuelReq: Bad coords`,
           startCoords,
           endCoords
         );
@@ -1535,7 +1535,7 @@
       if (CoordsEqual(startCoords, endCoords)) {
         window.logger.cLog(
           4,
-          `${FleetTimeStamp(fleet.label)} calcWarpFuelReq: Same coords`,
+          `${window.utils.timeUtils.FleetTimeStamp(fleet.label)} calcWarpFuelReq: Same coords`,
           startCoords,
           endCoords
         );
@@ -1562,7 +1562,7 @@
         jumps++;
       }
 
-      //window.logger.cLog(4, `${FleetTimeStamp(fleet.label)} calcWarpFuelReq: ${fuelRequired} fuel over ${jumps} jumps`);
+      //window.logger.cLog(4, `${window.utils.timeUtils.FleetTimeStamp(fleet.label)} calcWarpFuelReq: ${fuelRequired} fuel over ${jumps} jumps`);
       return fuelRequired;
     }
 
@@ -2027,7 +2027,6 @@
               window.blockchainManager.programPK
             );
 
-            debugger;
           let fleetCurrentCargo =
             await window.blockchainManager.solanaReadConnection.getParsedTokenAccountsByOwner(
               fleet.account.cargoHold,
@@ -2637,7 +2636,7 @@
         const coordStr = `[${destX},${destY}]`;
         window.logger.cLog(
           1,
-          `${FleetTimeStamp(fleet.label)} Subwarping to ${coordStr}`
+          `${window.utils.timeUtils.FleetTimeStamp(fleet.label)} Subwarping to ${coordStr}`
         );
         updateFleetState(fleet, "Subwarping");
 
@@ -2693,7 +2692,7 @@
         const coordStr = `[${destX},${destY}]`;
         window.logger.cLog(
           1,
-          `${FleetTimeStamp(fleet.label)} Warping to ${coordStr}`
+          `${window.utils.timeUtils.FleetTimeStamp(fleet.label)} Warping to ${coordStr}`
         );
         updateFleetState(fleet, "Warping");
 
@@ -2799,12 +2798,12 @@
             .instruction(),
         };
 
-        window.logger.cLog(1, `${FleetTimeStamp(fleet.label)} Docking`);
+        window.logger.cLog(1, `${window.utils.timeUtils.FleetTimeStamp(fleet.label)} Docking`);
         updateFleetState(fleet, "Docking");
 
         let txResult = await txSignAndSend(tx, fleet, "DOCK");
 
-        window.logger.cLog(1, `${FleetTimeStamp(fleet.label)} Docked`);
+        window.logger.cLog(1, `${window.utils.timeUtils.FleetTimeStamp(fleet.label)} Docked`);
         updateFleetState(fleet, "Docked");
 
         resolve(txResult);
@@ -2852,7 +2851,7 @@
             .instruction(),
         };
 
-        window.logger.cLog(1, `${FleetTimeStamp(fleet.label)} Undocking`);
+        window.logger.cLog(1, `${window.utils.timeUtils.FleetTimeStamp(fleet.label)} Undocking`);
         updateFleetState(fleet, "Undocking");
 
         let txResult = await txSignAndSend(tx, fleet, "UNDOCK");
@@ -2868,7 +2867,7 @@
       const fleet = userFleets[i];
       window.logger.cLog(
         1,
-        `${FleetTimeStamp(fleet.label)} Undock ${assignment} Startup`
+        `${window.utils.timeUtils.FleetTimeStamp(fleet.label)} Undock ${assignment} Startup`
       );
 
       if (assignment == "Transport" || assignment == "Mine") {
@@ -2899,7 +2898,7 @@
 
       window.logger.cLog(
         1,
-        `${FleetTimeStamp(fleet.label)} Undock Startup Complete`
+        `${window.utils.timeUtils.FleetTimeStamp(fleet.label)} Undock Startup Complete`
       );
     }
 
@@ -3086,7 +3085,7 @@
     async createScannerPDAs(fleet) {
       window.logger.cLog(
         2,
-        `${FleetTimeStamp(fleet.label)} Maintaining Scanner PDAs`
+        `${window.utils.timeUtils.FleetTimeStamp(fleet.label)} Maintaining Scanner PDAs`
       );
       (await window.assistant.getAccountInfo(
         fleet.label,
@@ -3306,7 +3305,7 @@
 
         window.logger.cLog(
           1,
-          `${FleetTimeStamp(fleet.label)} Mining Start ...`
+          `${window.utils.timeUtils.FleetTimeStamp(fleet.label)} Mining Start ...`
         );
         updateFleetState(fleet, "Mine Starting");
 
@@ -3399,7 +3398,7 @@
         );
         window.logger.cLog(
           2,
-          `${FleetTimeStamp(fleet.label)} Mining getAccountInfo result`,
+          `${window.utils.timeUtils.FleetTimeStamp(fleet.label)} Mining getAccountInfo result`,
           accInfo
         );
         if (!accInfo) {
@@ -3412,7 +3411,7 @@
 
           window.logger.cLog(
             2,
-            `${FleetTimeStamp(fleet.label)} Mining createPDA result`,
+            `${window.utils.timeUtils.FleetTimeStamp(fleet.label)} Mining createPDA result`,
             cpda
           );
         }
@@ -3585,13 +3584,13 @@
             .instruction(),
         };
 
-        window.logger.cLog(1, `${FleetTimeStamp(fleet.label)} Mining Stop`);
+        window.logger.cLog(1, `${window.utils.timeUtils.FleetTimeStamp(fleet.label)} Mining Stop`);
         updateFleetState(fleet, "Mining Stop");
 
         let txResult = await txSignAndSend(tx2, fleet, "STOP MINING");
 
         //await wait(2000);
-        window.logger.cLog(1, `${FleetTimeStamp(fleet.label)} Idle 💤`);
+        window.logger.cLog(1, `${window.utils.timeUtils.FleetTimeStamp(fleet.label)} Idle 💤`);
         updateFleetState(fleet, "Idle");
 
         resolve(txResult);
@@ -3632,7 +3631,7 @@
         amountLoaded = resAmmoMax - currentAmmoCnt;
         window.logger.cLog(
           1,
-          `${FleetTimeStamp(fleet.label)} Loading Ammobanks: ${amountLoaded}`
+          `${window.utils.timeUtils.FleetTimeStamp(fleet.label)} Loading Ammobanks: ${amountLoaded}`
         );
         await execCargoFromStarbaseToFleet(
           fleet,
@@ -3989,7 +3988,7 @@
       ) {
         if (!userFleets[i].state.includes("Warp C/D")) {
           const starbaseCoords = ConvertCoords(userFleets[i].starbaseCoord);
-          //window.logger.cLog(4, `${FleetTimeStamp(userFleets[i].label)} starbaseCoords: ${starbaseCoords}`);
+          //window.logger.cLog(4, `${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)} starbaseCoords: ${starbaseCoords}`);
 
           let fuelNeeded = 0;
           if (userFleets[i].moveType == "warp") {
@@ -4006,19 +4005,19 @@
             fuelNeeded = warpCostFromFleetToDest + warpCostFromDestToStarbase;
             window.logger.cLog(
               4,
-              `${FleetTimeStamp(
+              `${window.utils.timeUtils.FleetTimeStamp(
                 userFleets[i].label
               )} Warp cost to target: ${warpCostFromFleetToDest}`
             );
             window.logger.cLog(
               4,
-              `${FleetTimeStamp(
+              `${window.utils.timeUtils.FleetTimeStamp(
                 userFleets[i].label
               )} Warp cost to return: ${warpCostFromDestToStarbase}`
             );
             window.logger.cLog(
               4,
-              `${FleetTimeStamp(
+              `${window.utils.timeUtils.FleetTimeStamp(
                 userFleets[i].label
               )} Warp cost total: ${fuelNeeded}`
             );
@@ -4037,7 +4036,7 @@
             );
             window.logger.cLog(
               4,
-              `${FleetTimeStamp(
+              `${window.utils.timeUtils.FleetTimeStamp(
                 userFleets[i].label
               )} Subwarp cost total: ${fuelNeeded}`
             );
@@ -4062,7 +4061,7 @@
           if (currentFuelCnt > fuelNeeded) {
             window.logger.cLog(
               1,
-              `${FleetTimeStamp(userFleets[i].label)}`,
+              `${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)}`,
               fuelReadout
             );
             let moveDist = calculateMovementDistance(fleetCoords, destCoords);
@@ -4080,19 +4079,19 @@
               await handleMovement(i, moveDist, destCoords[0], destCoords[1]);
               window.logger.cLog(
                 1,
-                `${FleetTimeStamp(userFleets[i].label)} Movement finished`
+                `${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)} Movement finished`
               );
               userFleets[i].scanStrikes = 0;
             } else {
               window.logger.cLog(
                 1,
-                `${FleetTimeStamp(userFleets[i].label)} Skipping movement`
+                `${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)} Skipping movement`
               );
             }
           } else {
             window.logger.cLog(
               1,
-              `${FleetTimeStamp(userFleets[i].label)} ${fuelReadout} (low)`
+              `${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)} ${fuelReadout} (low)`
             );
             if (globalSettings.scanResupplyOnLowFuel) {
               await handleResupply(i, fleetCoords);
@@ -4100,7 +4099,7 @@
             } else {
               window.logger.cLog(
                 3,
-                `${FleetTimeStamp(userFleets[i].label)} Moved:`,
+                `${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)} Moved:`,
                 moved
               );
             }
@@ -4144,7 +4143,7 @@
 
         window.logger.cLog(
           1,
-          `${FleetTimeStamp(userFleets[i].label)} 📡 ${Math.round(
+          `${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)} 📡 ${Math.round(
             scanCondition
           )}%${sduFound > 0 ? ` | 💰 FOUND: ${sduFound}` : ""}`
         );
@@ -4152,7 +4151,7 @@
           userFleets[i].scanStrikes++;
           window.logger.cLog(
             3,
-            `${FleetTimeStamp(userFleets[i].label)} ⚡️ Strike ${
+            `${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)} ⚡️ Strike ${
               userFleets[i].scanStrikes
             } / ${globalSettings.scanStrikeCount}`
           );
@@ -4160,7 +4159,7 @@
           userFleets[i].scanStrikes = 0;
           window.logger.cLog(
             3,
-            `${FleetTimeStamp(userFleets[i].label)} 🔙 Strikes reset`
+            `${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)} 🔙 Strikes reset`
           );
         }
 
@@ -4169,7 +4168,7 @@
         if (struckOut) {
           window.logger.cLog(
             3,
-            `${FleetTimeStamp(userFleets[i].label)} 🔺 Sector struck out`
+            `${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)} 🔺 Sector struck out`
           );
           userFleets[i].scanSkipCnt++;
         }
@@ -4194,7 +4193,7 @@
           )}]`;
           window.logger.cLog(
             1,
-            `${FleetTimeStamp(
+            `${window.utils.timeUtils.FleetTimeStamp(
               userFleets[i].label
             )} Scanning Paused due to low probability [${TimeToStr(
               new Date(userFleets[i].scanEnd)
@@ -4230,7 +4229,7 @@
       async function unloadSDU() {
         window.logger.cLog(
           1,
-          `${FleetTimeStamp(userFleets[i].label)} Unloading SDU`
+          `${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)} Unloading SDU`
         );
 
         //Get SDU count
@@ -4258,7 +4257,7 @@
           );
           window.logger.cLog(
             2,
-            `${FleetTimeStamp(userFleets[i].label)} Unloaded ${sduToUnload} SDU`
+            `${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)} Unloaded ${sduToUnload} SDU`
           );
           userFleets[i].sduCnt = 1;
         }
@@ -4267,7 +4266,7 @@
       async function loadFood() {
         window.logger.cLog(
           1,
-          `${FleetTimeStamp(userFleets[i].label)} Loading Food`
+          `${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)} Loading Food`
         );
 
         //Update this just in case it's missing
@@ -4313,7 +4312,7 @@
         if (userFleets[i].foodCnt < userFleets[i].scanCost) {
           window.logger.cLog(
             1,
-            `${FleetTimeStamp(
+            `${window.utils.timeUtils.FleetTimeStamp(
               userFleets[i].label
             )} ERROR: Not enough food at starbase - waiting for more`
           );
@@ -4333,7 +4332,7 @@
       async function loadFuel() {
         window.logger.cLog(
           1,
-          `${FleetTimeStamp(userFleets[i].label)} Refueling`
+          `${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)} Refueling`
         );
         let fleetCurrentFuel =
           await window.blockchainManager.solanaReadConnection.getParsedTokenAccountsByOwner(
@@ -4383,7 +4382,7 @@
         ) {
           window.logger.cLog(
             1,
-            `${FleetTimeStamp(
+            `${window.utils.timeUtils.FleetTimeStamp(
               userFleets[i].label
             )} ERROR: Not enough fuel at starbase - waiting for more`
           );
@@ -4409,7 +4408,7 @@
         //At starbase
         window.logger.cLog(
           1,
-          `${FleetTimeStamp(userFleets[i].label)} Resupply: Docking at starbase`
+          `${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)} Resupply: Docking at starbase`
         );
         await execDock(userFleets[i], userFleets[i].starbaseCoord);
 
@@ -4434,18 +4433,18 @@
         if (moveDist > 0 && !userFleets[i].state.includes("Warp C/D")) {
           window.logger.cLog(
             1,
-            `${FleetTimeStamp(userFleets[i].label)} Resupply: Moving to base`
+            `${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)} Resupply: Moving to base`
           );
           updateFleetState(userFleets[i], "Idle");
           await handleMovement(i, moveDist, baseCoords[0], baseCoords[1]);
           window.logger.cLog(
             1,
-            `${FleetTimeStamp(userFleets[i].label)} Resupply: Arrived at base`
+            `${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)} Resupply: Arrived at base`
           );
         } else {
           window.logger.cLog(
             1,
-            `${FleetTimeStamp(userFleets[i].label)} Resupply: Already at base`
+            `${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)} Resupply: Already at base`
           );
         }
       }
@@ -4500,7 +4499,7 @@
         ).name;
         window.logger.cLog(
           1,
-          `${FleetTimeStamp(
+          `${window.utils.timeUtils.FleetTimeStamp(
             userFleets[i].label
           )} ERROR: ${resShort} not found at mining location`
         );
@@ -4636,7 +4635,7 @@
 
       window.logger.cLog(
         4,
-        `${FleetTimeStamp(userFleets[i].label)} handleMining -> fleet:`,
+        `${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)} handleMining -> fleet:`,
         fleetCoords,
         `starbase:`,
         [starbaseX, starbaseY],
@@ -4693,7 +4692,7 @@
           } else {
             window.logger.cLog(
               1,
-              `${FleetTimeStamp(userFleets[i].label)} Idle 💤`
+              `${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)} Idle 💤`
             );
             updateFleetState(userFleets[i], "Idle");
           }
@@ -4701,7 +4700,7 @@
           const msg = "ERROR: Fleet must start at Target or Starbase";
           window.logger.cLog(
             1,
-            `${FleetTimeStamp(userFleets[i].label)} Mining - ${msg}`
+            `${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)} Mining - ${msg}`
           );
           updateFleetState(userFleets[i], msg);
         }
@@ -4716,7 +4715,7 @@
         if (miningDuration < 60) {
           window.logger.cLog(
             1,
-            `${FleetTimeStamp(
+            `${window.utils.timeUtils.FleetTimeStamp(
               userFleets[i].label
             )} Supplies low, only ${miningDuration} seconds left`
           );
@@ -4733,7 +4732,7 @@
         if (needSupplies) {
           window.logger.cLog(
             1,
-            `${FleetTimeStamp(userFleets[i].label)} Need resupply`
+            `${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)} Need resupply`
           );
 
           //Recalulate requirements based on total cargo cap
@@ -4756,26 +4755,26 @@
 
           window.logger.cLog(
             2,
-            `${FleetTimeStamp(
+            `${window.utils.timeUtils.FleetTimeStamp(
               userFleets[i].label
             )} Calculated miningDuration: ${miningDuration}`
           );
           window.logger.cLog(
             2,
-            `${FleetTimeStamp(
+            `${window.utils.timeUtils.FleetTimeStamp(
               userFleets[i].label
             )} fuel: ${currentFuelCnt}/${fuelNeeded}`
           );
           window.logger.cLog(
             2,
-            `${FleetTimeStamp(
+            `${window.utils.timeUtils.FleetTimeStamp(
               userFleets[i].label
             )} ammo: ${currentAmmoCnt}/${ammoForDuration}`
           );
-          //window.logger.cLog(2, `${FleetTimeStamp(userFleets[i].label)} ammoForDuration: ${ammoForDuration} = miningDuration ${miningDuration} * (ammoConsumptionRate ${userFleets[i].ammoConsumptionRate} / 10000)`);
+          //window.logger.cLog(2, `${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)} ammoForDuration: ${ammoForDuration} = miningDuration ${miningDuration} * (ammoConsumptionRate ${userFleets[i].ammoConsumptionRate} / 10000)`);
           window.logger.cLog(
             2,
-            `${FleetTimeStamp(
+            `${window.utils.timeUtils.FleetTimeStamp(
               userFleets[i].label
             )} food: ${currentFoodCnt}/${foodForDuration}`
           );
@@ -4784,7 +4783,7 @@
             await execDock(userFleets[i], userFleets[i].starbaseCoord);
             window.logger.cLog(
               1,
-              `${FleetTimeStamp(userFleets[i].label)} Unloading resource`
+              `${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)} Unloading resource`
             );
             updateFleetState(userFleets[i], `Unloading`);
             if (currentResourceCnt > 0) {
@@ -4802,7 +4801,7 @@
             if (currentFuelCnt < fuelNeeded) {
               window.logger.cLog(
                 1,
-                `${FleetTimeStamp(userFleets[i].label)} Loading fuel`
+                `${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)} Loading fuel`
               );
               updateFleetState(userFleets[i], `Loading`);
               let fuelCargoTypeAcct = cargoTypes.find(
@@ -4822,7 +4821,7 @@
               if (fuelResp && fuelResp.name == "NotEnoughResource") {
                 window.logger.cLog(
                   1,
-                  `${FleetTimeStamp(
+                  `${window.utils.timeUtils.FleetTimeStamp(
                     userFleets[i].label
                   )} ERROR: Not enough fuel`
                 );
@@ -4832,7 +4831,7 @@
             } else {
               window.logger.cLog(
                 1,
-                `${FleetTimeStamp(
+                `${window.utils.timeUtils.FleetTimeStamp(
                   userFleets[i].label
                 )} Fuel loading skipped: ${currentFuelCnt} / ${fuelNeeded}`
               );
@@ -4841,7 +4840,7 @@
             if (currentAmmoCnt < ammoForDuration) {
               window.logger.cLog(
                 1,
-                `${FleetTimeStamp(userFleets[i].label)} Loading ammo`
+                `${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)} Loading ammo`
               );
               updateFleetState(userFleets[i], `Loading`);
               let ammoCargoTypeAcct = cargoTypes.find(
@@ -4861,7 +4860,7 @@
               if (ammoResp && ammoResp.name == "NotEnoughResource") {
                 window.logger.cLog(
                   1,
-                  `${FleetTimeStamp(
+                  `${window.utils.timeUtils.FleetTimeStamp(
                     userFleets[i].label
                   )} ERROR: Not enough ammo`
                 );
@@ -4871,7 +4870,7 @@
             } else {
               window.logger.cLog(
                 1,
-                `${FleetTimeStamp(
+                `${window.utils.timeUtils.FleetTimeStamp(
                   userFleets[i].label
                 )} Ammo loading skipped: ${currentAmmoCnt} / ${ammoForDuration}`
               );
@@ -4899,7 +4898,7 @@
             if (currentFoodCnt < foodForDuration) {
               window.logger.cLog(
                 1,
-                `${FleetTimeStamp(userFleets[i].label)} Loading food`
+                `${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)} Loading food`
               );
               updateFleetState(userFleets[i], `Loading`);
               let foodCargoTypeAcct = cargoTypes.find(
@@ -4919,7 +4918,7 @@
               if (foodResp && foodResp.name == "NotEnoughResource") {
                 window.logger.cLog(
                   1,
-                  `${FleetTimeStamp(
+                  `${window.utils.timeUtils.FleetTimeStamp(
                     userFleets[i].label
                   )} ERROR: Not enough food`
                 );
@@ -4929,7 +4928,7 @@
             } else {
               window.logger.cLog(
                 1,
-                `${FleetTimeStamp(
+                `${window.utils.timeUtils.FleetTimeStamp(
                   userFleets[i].label
                 )} Food loading skipped: ${currentFoodCnt} / ${foodForDuration}`
               );
@@ -4976,7 +4975,7 @@
           const [fleetState, extra] = getFleetState(fleetAcctInfo);
           window.logger.cLog(
             4,
-            `${FleetTimeStamp(
+            `${window.utils.timeUtils.FleetTimeStamp(
               userFleets[i].label
             )} chain fleet state: ${fleetState}`
           );
@@ -4994,7 +4993,7 @@
       if (userFleets[i].state.slice(0, 4) === "Mine" && fleetMining) {
         window.logger.cLog(
           1,
-          `${FleetTimeStamp(
+          `${window.utils.timeUtils.FleetTimeStamp(
             userFleets[i].label
           )} Debug fleetMining: ${fleetMining}`
         );
@@ -5090,7 +5089,7 @@
           } else
             window.logger.cLog(
               1,
-              `${FleetTimeStamp(
+              `${window.utils.timeUtils.FleetTimeStamp(
                 userFleets[i].label
               )} Unloading skipped - No resources specified`
             );
@@ -5128,14 +5127,14 @@
             );
             if (!loadedCargo && globalSettings.transportStopOnError) {
               //const newFleetState = `ERROR: No more cargo to load`;
-              //window.logger.cLog(1,`${FleetTimeStamp(userFleets[i].label)} ${newFleetState}`);
+              //window.logger.cLog(1,`${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)} ${newFleetState}`);
               //userFleets[i].state = newFleetState;
               return;
             }
           } else
             window.logger.cLog(
               1,
-              `${FleetTimeStamp(
+              `${window.utils.timeUtils.FleetTimeStamp(
                 userFleets[i].label
               )} Loading skipped - No resources specified`
             );
@@ -5162,7 +5161,7 @@
           } else
             window.logger.cLog(
               1,
-              `${FleetTimeStamp(
+              `${window.utils.timeUtils.FleetTimeStamp(
                 userFleets[i].label
               )} Unloading skipped - No resources specified`
             );
@@ -5199,14 +5198,14 @@
             );
             if (!loadedCargo && globalSettings.transportStopOnError) {
               //const newFleetState = `ERROR: No more cargo to load`;
-              //window.logger.cLog(1,`${FleetTimeStamp(userFleets[i].label)} ${newFleetState}`);
+              //window.logger.cLog(1,`${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)} ${newFleetState}`);
               //userFleets[i].state = newFleetState;
               return;
             }
           } else
             window.logger.cLog(
               1,
-              `${FleetTimeStamp(
+              `${window.utils.timeUtils.FleetTimeStamp(
                 userFleets[i].label
               )} Loading skipped - No resources specified`
             );
@@ -5233,7 +5232,7 @@
         } else {
           window.logger.cLog(
             1,
-            `${FleetTimeStamp(
+            `${window.utils.timeUtils.FleetTimeStamp(
               userFleets[i].label
             )} Transporting - ERROR: Fleet must start at Target or Starbase`
           );
@@ -5253,7 +5252,7 @@
         if (userFleets[i].scanMove) {
           window.logger.cLog(
             2,
-            `${FleetTimeStamp(userFleets[i].label)} Checking scanBlock`,
+            `${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)} Checking scanBlock`,
             userFleets[i].scanBlock
           );
           for (let s = 0; s < userFleets[i].scanBlock.length - 1; s++) {
@@ -5266,7 +5265,7 @@
                 userFleets[i].scanBlockIdx = s;
                 window.logger.cLog(
                   2,
-                  `${FleetTimeStamp(
+                  `${window.utils.timeUtils.FleetTimeStamp(
                     userFleets[i].label
                   )} Resuming scanBlockIdx: ${s}`
                 );
@@ -6326,7 +6325,7 @@
     assistModalToggle() {
       window.logger.cLog(
         4,
-        `${FleetTimeStamp(
+        `${window.utils.timeUtils.FleetTimeStamp(
           "SYSTEM"
         )} Solana Reads: ${solanaReadCount} / Writes: ${solanaWriteCount}`
       );
@@ -6809,10 +6808,10 @@
         });
       },
       TimeStamp: function () {
-        return `[${TimeToStr(new Date(Date.now()))}]`;
+        return `[${this.TimeToStr(new Date(Date.now()))}]`;
       },
       FleetTimeStamp: function (fleetName) {
-        return `[${fleetName}] ${TimeStamp()}`;
+        return `[${fleetName}] ${this.TimeStamp()}`;
       },
     },
     typeUtils: {
