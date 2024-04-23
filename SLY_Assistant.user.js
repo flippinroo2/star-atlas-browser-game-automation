@@ -3274,6 +3274,124 @@
         ));
     }
 
+    async execExitSubwarp(fleet) {
+      return new Promise(async (resolve) => {
+        let fuelCargoTypeAcct = cargoTypes.find(
+          (item) =>
+            item.account.mint.toString() == sageGameAcct.account.mints.fuel
+        );
+        let tx = {
+          instruction: await sageProgram.methods
+            .fleetStateHandler()
+            .accountsStrict({
+              fleet: fleet.publicKey,
+            })
+            .remainingAccounts([
+              {
+                pubkey: userProfileAcct,
+                isSigner: false,
+                isWritable: true,
+              },
+              {
+                pubkey: fleet.fuelTank,
+                isSigner: false,
+                isWritable: true,
+              },
+              {
+                pubkey: fuelCargoTypeAcct.publicKey,
+                isSigner: false,
+                isWritable: false,
+              },
+              {
+                pubkey: sageGameAcct.account.cargo.statsDefinition,
+                isSigner: false,
+                isWritable: false,
+              },
+              {
+                pubkey: fleet.fuelToken,
+                isSigner: false,
+                isWritable: true,
+              },
+              {
+                pubkey: sageGameAcct.account.mints.fuel,
+                isSigner: false,
+                isWritable: true,
+              },
+              {
+                pubkey: userXpAccounts.userPilotingXpAccounts.userPointsAccount,
+                isSigner: false,
+                isWritable: true,
+              },
+              {
+                pubkey: userXpAccounts.userPilotingXpAccounts.pointsCategory,
+                isSigner: false,
+                isWritable: false,
+              },
+              {
+                pubkey:
+                  userXpAccounts.userPilotingXpAccounts.pointsModifierAccount,
+                isSigner: false,
+                isWritable: false,
+              },
+              {
+                pubkey:
+                  userXpAccounts.userCouncilRankXpAccounts.userPointsAccount,
+                isSigner: false,
+                isWritable: true,
+              },
+              {
+                pubkey: userXpAccounts.userCouncilRankXpAccounts.pointsCategory,
+                isSigner: false,
+                isWritable: false,
+              },
+              {
+                pubkey:
+                  userXpAccounts.userCouncilRankXpAccounts
+                    .pointsModifierAccount,
+                isSigner: false,
+                isWritable: false,
+              },
+              {
+                pubkey: progressionConfigAcct,
+                isSigner: false,
+                isWritable: false,
+              },
+              {
+                pubkey: sageGameAcct.publicKey,
+                isSigner: false,
+                isWritable: false,
+              },
+              {
+                pubkey: pointsProgramId,
+                isSigner: false,
+                isWritable: false,
+              },
+              {
+                pubkey: cargoProgramPK,
+                isSigner: false,
+                isWritable: false,
+              },
+              {
+                pubkey: tokenProgramPK,
+                isSigner: false,
+                isWritable: false,
+              },
+            ])
+            .instruction(),
+        };
+
+        cLog(1, `${FleetTimeStamp(fleet.label)} Exiting Subwarp`);
+        updateFleetState(fleet, "Exiting Subwarp");
+
+        let txResult = await txSignAndSend(tx, fleet, "EXIT SUBWARP");
+
+        cLog(1, `${FleetTimeStamp(fleet.label)} Idle 💤`);
+        updateFleetState(fleet, "Idle");
+
+        resolve(txResult);
+      });
+    }
+
     async execCargoFromStarbaseToFleet(
       fleet,
       cargoPodTo,
