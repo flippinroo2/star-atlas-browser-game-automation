@@ -18,6 +18,8 @@
 (async function () {
   "use strict";
 
+  const DEBUG = true;
+
   class Action {
     ActionType = {
       MINE: "MINE",
@@ -26,12 +28,39 @@
     };
   }
 
+  class SolanaAccountInfo {
+    data = [];
+    executable = false;
+    lamports = 0;
+    owner = "";
+    rentEpoch = 0;
+    space = 0;
+
+    constructor({ data, executable, lamports, owner, rentEpoch, space }) {
+      this.data = data;
+      this.executable = executable;
+      this.lamports = lamports;
+      this.owner = owner;
+      this.rentEpoch = rentEpoch;
+      this.space = space;
+    }
+
+    // constructor(data, executable, lamports, owner, rentEpoch, space) {
+    //   this.data = data;
+    //   this.executable = executable;
+    //   this.lamports = lamports;
+    //   this.owner = owner;
+    //   this.rentEpoch = rentEpoch;
+    //   this.space = space;
+    // }
+  }
+
   class Assistant {
     enableAssistant = false;
 
     async toggleAssistant() {
       let autoSpanRef = document.querySelector("#autoScanBtn > span");
-      if (enableAssistant === true) {
+      if (this.enableAssistant === true) {
         let waitForSequence = true;
         autoSpanRef.innerHTML = "Wait...";
         while (waitForSequence) {
@@ -47,10 +76,10 @@
           if (!fleetBusy) waitForSequence = false;
           await window.utils.timeUtils.wait(5000);
         }
-        enableAssistant = false;
+        this.enableAssistant = false;
         autoSpanRef.innerHTML = "Start";
       } else {
-        enableAssistant = true;
+        this.enableAssistant = true;
         await this.startAssistant();
         autoSpanRef.innerHTML = "Stop";
         for (let i = 0, n = userFleets.length; i < n; i++) {
@@ -59,7 +88,8 @@
             "full fleet info",
             userFleets[i].publicKey
           );
-          let [fleetState, extra] = window.Fleet.getFleetState(fleetAcctInfo);
+          let [fleetState, extra] =
+            window.Fleet.prototype.getFleetState(fleetAcctInfo);
           let fleetCoords = fleetState == "Idle" && extra ? extra : [];
           userFleets[i].startingCoords = fleetCoords;
           userFleets[i].state = fleetState;
@@ -79,7 +109,7 @@
         let fleetParsedData = JSON.parse(fleetSavedData);
 
         if (fleetParsedData.assignment)
-          updateFleetState(userFleets[i], "Starting");
+          window.Fleet.prototype.updateFleetState(userFleets[i], "Starting");
 
         //Stagger fleet starts by 500ms to avoid overloading the RPC
         setTimeout(() => {
@@ -87,7 +117,7 @@
         }, 500 * (i + 1));
       }
 
-      setTimeout(fleetHealthCheck, 5000);
+      setTimeout(window.Fleet.prototype.fleetHealthCheck, 5000);
     }
 
     async getAccountInfo(fleetName, reason, params) {
@@ -240,7 +270,17 @@
     }
 
     async getAccountInfo(params) {
-      return await this.solanaReadConnection.getAccountInfo(params);
+      if (!params) {
+        debugger;
+      }
+      const returnValue = await this.solanaReadConnection.getAccountInfo(
+        params
+      );
+      if (!returnValue) {
+        debugger;
+      }
+      // return new SolanaAccountInfo(returnValue);
+      return returnValue;
     }
 
     getBalanceChange(txResult, targetAcct) {
@@ -275,6 +315,7 @@
       fleet,
       opName
     ) {
+      debugger;
       let { blockHeight: curBlockHeight } =
         await this.solanaReadConnection.getEpochInfo({
           commitment: "confirmed",
@@ -320,7 +361,9 @@
           return { txHash, confirmation: signatureStatus };
         }
 
-        await wait(Math.max(200, globalSettings.confirmationCheckingDelay));
+        await wait(
+          Math.max(200, window.globalSettings.confirmationCheckingDelay)
+        );
         let epochInfo = await this.solanaReadConnection.getEpochInfo({
           commitment: "confirmed",
         });
@@ -345,20 +388,22 @@
 
     txSignAndSend(ix, fleet, opName, priorityFeeMultiplier) {
       return new Promise(async (resolve) => {
+        debugger;
         const fleetName = fleet ? fleet.label : "unknown";
         let macroOpStart = Date.now();
         if (!priorityFeeMultiplier)
-          priorityFeeMultiplier = globalSettings.lowPriorityFeeMultiplier;
+          priorityFeeMultiplier =
+            window.globalSettings.lowPriorityFeeMultiplier;
         priorityFeeMultiplier = priorityFeeMultiplier / 100;
 
         let confirmed = false;
         while (!confirmed) {
           //let tx = new solanaWeb3.Transaction();
-          const priorityFee = globalSettings.priorityFee
+          const priorityFee = window.globalSettings.priorityFee
             ? Math.max(
                 1,
                 Math.ceil(
-                  priorityFeeMultiplier * globalSettings.priorityFee * 5
+                  priorityFeeMultiplier * window.globalSettings.priorityFee * 5
                 )
               )
             : 0; //Convert Lamports to microLamports ?
@@ -1066,7 +1111,7 @@
     }
 
     async fleetHealthCheck() {
-      if (!enableAssistant) return;
+      if (!window.assistant.enableAssistant) return;
 
       let fleetStallCount = 0;
       for (let i = 0, n = userFleets.length; i < n; i++) {
@@ -1110,9 +1155,9 @@
 
       //Auto-reload when too many fleets fail
       if (
-        globalSettings.reloadPageOnFailedFleets &&
+        window.globalSettings.reloadPageOnFailedFleets &&
         fleetStallCount &&
-        globalSettings.reloadPageOnFailedFleets <= fleetStallCount
+        window.globalSettings.reloadPageOnFailedFleets <= fleetStallCount
       ) {
         window.logger.cLog(
           1,
@@ -1122,7 +1167,7 @@
         return;
       }
 
-      if (enableAssistant) setTimeout(fleetHealthCheck, 10000);
+      if (window.assistant.enableAssistant) setTimeout(fleetHealthCheck, 10000);
     }
 
     async fuelFleet(fleet, dockCoords, account, amount) {
@@ -1771,7 +1816,7 @@
       }
 
       //Ammo bank unloading
-      const ammoEntry = globalSettings.transportUseAmmoBank
+      const ammoEntry = window.globalSettings.transportUseAmmoBank
         ? transportManifest.find((e) => e.res === ammoMint)
         : undefined;
       if (ammoEntry) {
@@ -1817,7 +1862,7 @@
       updateFleetState(userFleets[i], "Loading");
 
       //Use ammo banks if possible
-      const ammoEntry = globalSettings.transportUseAmmoBank
+      const ammoEntry = window.globalSettings.transportUseAmmoBank
         ? transportManifest.find(
             (e) => e.res === sageGameAcct.account.mints.ammo.toString()
           )
@@ -2075,7 +2120,7 @@
 
     async startFleet(i) {
       //Bail if assistant is stopped
-      if (!enableAssistant) return;
+      if (!window.assistant.enableAssistant) return;
 
       let extraTime = 0;
       const fleet = userFleets[i];
@@ -2091,7 +2136,7 @@
         //Bail if no assignment
         if (fleetParsedData.assignment) {
           fleet.fontColor = "aquamarine";
-          window.UserInterface.updateAssistStatus(fleet);
+          window.userInterface.updateAssistStatus(fleet);
 
           if (
             !fleet.initilizedScanPDAs &&
@@ -2104,7 +2149,7 @@
           await operateFleet(i);
 
           fleet.fontColor = "white";
-          window.UserInterface.updateAssistStatus(fleet);
+          window.userInterface.updateAssistStatus(fleet);
         }
       } catch (error) {
         extraTime = 20000;
@@ -2117,7 +2162,7 @@
         );
 
         fleet.fontColor = "crimson";
-        window.UserInterface.updateAssistStatus(fleet);
+        window.userInterface.updateAssistStatus(fleet);
       }
 
       //Add extra wait time if an uncaught error occurred
@@ -2128,7 +2173,7 @@
 
     updateFleetState(fleet, newState) {
       fleet.state = newState;
-      window.UserInterface.updateAssistStatus(fleet);
+      window.userInterface.updateAssistStatus(fleet);
     }
   }
 
@@ -2194,18 +2239,18 @@
         }
 
         if (
-          window.settings.saveProfile &&
-          window.settings.savedProfile &&
-          window.settings.savedProfile.length > 0
+          window.globalSettings.saveProfile &&
+          window.globalSettings.savedProfile &&
+          window.globalSettings.savedProfile.length > 0
         ) {
           window.logger.cLog(
             1,
             "Skipping User Profile query, using saved profile"
           );
           userProfileAcct = new solanaWeb3.PublicKey(
-            window.settings.savedProfile[0]
+            window.globalSettings.savedProfile[0]
           );
-          userProfileKeyIdx = window.settings.savedProfile[1];
+          userProfileKeyIdx = window.globalSettings.savedProfile[1];
         } else {
           window.logger.cLog(1, "Getting User Profiles (this takes a while)");
           let userProfiles =
@@ -2263,30 +2308,30 @@
               : foundProf[0];
           userProfileAcct = new solanaWeb3.PublicKey(userProfile.profile);
           userProfileKeyIdx = userProfile.idx;
-          if (globalSettings.saveProfile) {
+          if (window.globalSettings.saveProfile) {
             /*
                       globalSettings = {
-                          priorityFee: globalSettings.priorityFee,
-                          lowPriorityFeeMultiplier: globalSettings.priorityFee,
-                          saveProfile: globalSettings.priorityFee,
+                          priorityFee: window.globalSettings.priorityFee,
+                          lowPriorityFeeMultiplier: window.globalSettings.priorityFee,
+                          saveProfile: window.globalSettings.priorityFee,
                           savedProfile: saveProfile ? (userProfileAcct && userProfileKeyIdx) ? [userProfileAcct.toString(), userProfileKeyIdx] : [] : [],
-                          confirmationCheckingDelay: globalSettings.priorityFee,
-                          debugLogLevel: globalSettings.priorityFee,
-                          transportUseAmmoBank: globalSettings.priorityFee,
-                          transportStopOnError: globalSettings.priorityFee,
-                          scanBlockPattern: globalSettings.priorityFee,
-                          scanBlockLength: globalSettings.priorityFee,
-                          scanBlockResetAfterResupply: globalSettings.priorityFee,
-                          scanResupplyOnLowFuel: globalSettings.priorityFee,
-                          scanSectorRegenTime: globalSettings.priorityFee,
-                          scanPauseTime: globalSettings.priorityFee,
-                          scanStrikeCount: globalSettings.priorityFee,
-                          statusPanelOpacity: globalSettings.priorityFee,
-                          autoStartScript: globalSettings.priorityFee,
-                          reloadPageOnFailedFleets: globalSettings.priorityFee,
+                          confirmationCheckingDelay: window.globalSettings.priorityFee,
+                          debugLogLevel: window.globalSettings.priorityFee,
+                          transportUseAmmoBank: window.globalSettings.priorityFee,
+                          transportStopOnError: window.globalSettings.priorityFee,
+                          scanBlockPattern: window.globalSettings.priorityFee,
+                          scanBlockLength: window.globalSettings.priorityFee,
+                          scanBlockResetAfterResupply: window.globalSettings.priorityFee,
+                          scanResupplyOnLowFuel: window.globalSettings.priorityFee,
+                          scanSectorRegenTime: window.globalSettings.priorityFee,
+                          scanPauseTime: window.globalSettings.priorityFee,
+                          scanStrikeCount: window.globalSettings.priorityFee,
+                          statusPanelOpacity: window.globalSettings.priorityFee,
+                          autoStartScript: window.globalSettings.priorityFee,
+                          reloadPageOnFailedFleets: window.globalSettings.priorityFee,
                       }
                       */
-            globalSettings.savedProfile = [
+            window.globalSettings.savedProfile = [
               userProfileAcct.toString(),
               userProfileKeyIdx,
             ];
@@ -2443,7 +2488,7 @@
             "Full Account Info",
             fleet.publicKey
           );
-          let [fleetState, extra] = await window.Fleet.getFleetState(
+          let [fleetState, extra] = await window.Fleet.prototype.getFleetState(
             fleetAcctInfo
           );
           let fleetCoords = fleetState == "Idle" && extra ? extra : [];
@@ -2511,7 +2556,7 @@
           return a.label.toUpperCase().localeCompare(b.label.toUpperCase());
         });
         this.initComplete = true;
-        if (globalSettings.autoStartScript) {
+        if (window.globalSettings.autoStartScript) {
           window.assistant.assistStatusToggle();
           window.assistant.toggleAssistant();
         }
@@ -2531,7 +2576,8 @@
           document.getElementById("assistContainerIso").remove();
         observer && observer.disconnect();
         let assistCSS = document.createElement("style");
-        const statusPanelOpacity = window.settings.statusPanelOpacity / 100;
+        const statusPanelOpacity =
+          window.globalSettings.statusPanelOpacity / 100;
         assistCSS.innerHTML = `.assist-modal {display: none; position: fixed; z-index: 2; padding-top: 100px; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.4);} .assist-modal-content {position: relative; display: flex; flex-direction: column; background-color: rgb(41, 41, 48); margin: auto; padding: 0; border: 1px solid #888; width: 785px; min-width: 450px; max-width: 75%; height: auto; min-height: 50px; max-height: 85%; overflow-y: auto; box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2),0 6px 20px 0 rgba(0,0,0,0.19); -webkit-animation-name: animatetop; -webkit-animation-duration: 0.4s; animation-name: animatetop; animation-duration: 0.4s;} #assist-modal-error {color: red; margin-left: 5px; margin-right: 5px; font-size: 16px;} .assist-modal-header-right {color: rgb(255, 190, 77); margin-left: auto !important; font-size: 20px;} .assist-btn {background-color: rgb(41, 41, 48); color: rgb(255, 190, 77); margin-left: 2px; margin-right: 2px;} .assist-btn:hover {background-color: rgba(255, 190, 77, 0.2);} .assist-modal-close:hover, .assist-modal-close:focus {font-weight: bold; text-decoration: none; cursor: pointer;} .assist-modal-btn {color: rgb(255, 190, 77); padding: 5px 5px; margin-right: 5px; text-decoration: none; background-color: rgb(41, 41, 48); border: none; cursor: pointer;} .assist-modal-save:hover { background-color: rgba(255, 190, 77, 0.2); } .assist-modal-header {display: flex; align-items: center; padding: 2px 16px; background-color: rgba(255, 190, 77, 0.2); border-bottom: 2px solid rgb(255, 190, 77); color: rgb(255, 190, 77);} .assist-modal-body {padding: 2px 16px; font-size: 12px;} .assist-modal-body > table {width: 100%;} .assist-modal-body th, .assist-modal-body td {padding-right: 5px, padding-left: 5px;} #assistStatus {background-color: rgba(0,0,0,${statusPanelOpacity}); opacity: ${statusPanelOpacity}; backdrop-filter: blur(10px); position: absolute; top: 80px; right: 20px; z-index: 1;} #assistStarbaseStatus {background-color: rgba(0,0,0,${statusPanelOpacity}); opacity: ${statusPanelOpacity}; backdrop-filter: blur(10px); position: absolute; top: 80px; right: 20px; z-index: 1;} #assistCheck {background-color: rgba(0,0,0,0.75); backdrop-filter: blur(10px); position: absolute; margin: auto; left: 0; right: 0; top: 100px; width: 650px; min-width: 450px; max-width: 75%; z-index: 1;} .dropdown { position: absolute; display: none; margin-top: 25px; margin-left: 152px; background-color: rgb(41, 41, 48); min-width: 120px; box-shadow: 0 8px 16px 0 rgba(0, 0, 0, 0.2); z-index: 2; } .dropdown.show { display: block; } .assist-btn-alt { color: rgb(255, 190, 77); padding: 12px 16px; text-decoration: none; display: block; background-color: rgb(41, 41, 48); border: none; cursor: pointer; } .assist-btn-alt:hover { background-color: rgba(255, 190, 77, 0.2); } #checkresults { padding: 5px; margin-top: 20px; border: 1px solid grey; border-radius: 8px;} .dropdown button {width: 100%; text-align: left;} #assistModal table {border-collapse: collapse;} .assist-scan-row, .assist-mine-row, .assist-transport-row {background-color: rgba(255, 190, 77, 0.1); border-left: 1px solid white; border-right: 1px solid white; border-bottom: 1px solid white} .show-top-border {background-color: rgba(255, 190, 77, 0.1); border-left: 1px solid white; border-right: 1px solid white; border-top: 1px solid white;}`;
 
         let assistModal = document.createElement("div");
@@ -2632,7 +2678,7 @@
         let autoBtnSpan = document.createElement("span");
         autoBtnSpan.innerText =
           this.initComplete == true
-            ? enableAssistant === true
+            ? window.assistant.enableAssistant === true
               ? "Stop"
               : "Start"
             : "Wait...";
@@ -2666,7 +2712,7 @@
         assistConfigButton.id = "assistConfigBtn";
         assistConfigButton.classList.add("assist-btn", "assist-btn-alt");
         assistConfigButton.addEventListener("click", function (e) {
-          assistModalToggle();
+          window.userInterface.assistModalToggle();
         });
         let assistConfigSpan = document.createElement("span");
         assistConfigSpan.innerText = "Config";
@@ -2775,7 +2821,7 @@
           "#assistModal .assist-modal-close"
         );
         assistModalClose.addEventListener("click", function (e) {
-          assistModalToggle();
+          window.userInterface.assistModalToggle();
         });
         let assistModalSave = document.querySelector(
           "#assistModal .assist-modal-save"
@@ -4324,7 +4370,7 @@
               `[${userFleet.label}] ERROR: ${resShort} not found at mining location`
             );
             userFleet.state = `ERROR: ${resShort} not found at mining location`;
-            window.UserInterface.updateAssistStatus(userFleet);
+            window.userInterface.updateAssistStatus(userFleet);
           }
 
           let miningDuration = calculateMiningDuration(
@@ -4644,7 +4690,7 @@
                 userFleets[i].label
               )} ${fuelReadout} (low)`
             );
-            if (globalSettings.scanResupplyOnLowFuel) {
+            if (window.globalSettings.scanResupplyOnLowFuel) {
               await handleResupply(i, fleetCoords);
               moved = true;
             } else {
@@ -4709,7 +4755,7 @@
             `${window.utils.timeUtils.FleetTimeStamp(
               userFleets[i].label
             )} ⚡️ Strike ${userFleets[i].scanStrikes} / ${
-              globalSettings.scanStrikeCount
+              window.globalSettings.scanStrikeCount
             }`
           );
         } else {
@@ -4723,7 +4769,7 @@
         }
 
         const struckOut =
-          userFleets[i].scanStrikes >= globalSettings.scanStrikeCount;
+          userFleets[i].scanStrikes >= window.globalSettings.scanStrikeCount;
         if (struckOut) {
           window.logger.cLog(
             3,
@@ -4748,7 +4794,7 @@
 
         if (needPause) {
           userFleets[i].scanEnd =
-            Date.now() + globalSettings.scanPauseTime * 1000;
+            Date.now() + window.globalSettings.scanPauseTime * 1000;
           userFleets[i].state = `Scanning Paused [${TimeToStr(
             new Date(userFleets[i].scanEnd)
           )}]`;
@@ -4767,7 +4813,7 @@
           if (sduFound)
             scanDelayMs = Math.max(
               scanDelayMs,
-              globalSettings.scanSectorRegenTime * 1000
+              window.globalSettings.scanSectorRegenTime * 1000
             );
           userFleets[i].scanEnd = Date.now() + scanDelayMs;
           userFleets[i].state = `Scanned [${Math.round(scanCondition)}%]${
@@ -4775,7 +4821,7 @@
           }`;
         }
 
-        window.UserInterface.updateAssistStatus(userFleets[i]);
+        window.userInterface.updateAssistStatus(userFleets[i]);
 
         //Start resupply immediately rather than waiting for scan cooldown
         if (currentFoodCnt - userFleets[i].scanCost < userFleets[i].scanCost)
@@ -4969,7 +5015,7 @@
       }
 
       userFleets[i].resupplying = true;
-      if (globalSettings.scanBlockResetAfterResupply)
+      if (window.globalSettings.scanBlockResetAfterResupply)
         userFleets[i].scanBlockIdx = 0;
       const baseCoords = ConvertCoords(userFleets[i].starbaseCoord);
 
@@ -5718,7 +5764,7 @@
               userFleets[i].starbaseCoord,
               targetCargoManifest
             );
-            if (!loadedCargo && globalSettings.transportStopOnError) {
+            if (!loadedCargo && window.globalSettings.transportStopOnError) {
               //const newFleetState = `ERROR: No more cargo to load`;
               //window.logger.cLog(1,`${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)} ${newFleetState}`);
               //userFleets[i].state = newFleetState;
@@ -5789,7 +5835,7 @@
               userFleets[i].destCoord,
               starbaseCargoManifest
             );
-            if (!loadedCargo && globalSettings.transportStopOnError) {
+            if (!loadedCargo && window.globalSettings.transportStopOnError) {
               //const newFleetState = `ERROR: No more cargo to load`;
               //window.logger.cLog(1,`${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)} ${newFleetState}`);
               //userFleets[i].state = newFleetState;
@@ -5875,7 +5921,7 @@
 
   class Logger {
     cLog(level, ...args) {
-      if (level <= window.settings.debugLogLevel) console.log(...args);
+      if (level <= window.globalSettings.debugLogLevel) console.log(...args);
     }
   }
 
@@ -5914,13 +5960,17 @@
               success = true;
             } catch (error2) {
               window.logger.cLog(2, `${proxyType} INNER ERROR: `, error2);
-              if (!isConnectivityError(error2)) return error2;
+              if (!isConnectivityError(error2)) {
+                return error2;
+              }
             }
             rpcIdx = rpcIdx + 1 < rpcs.length ? rpcIdx + 1 : 0;
 
             //Prevent spam if errors are occurring immediately (disconnected from internet / unplugged cable)
             await window.utils.timeUtils.wait(500);
           }
+        } else {
+          window.logger.cLog(2, `${proxyType} NOT isConnectivityError(): `, error1);
         }
       }
       return result;
@@ -5929,7 +5979,7 @@
 
   class Settings {
     settingsGmKey = "globalSettings";
-    statusPanelOpacity;
+    statusPanelOpacity = 75;
 
     constructor() {
       const rawSettingsData = GM.getValue(this.settingsGmKey, "{}").then(
@@ -5948,108 +5998,106 @@
       globalSettings = {
         // Priority Fee added to each transaction in Lamports. Set to 0 (zero) to disable priority fees. 1 Lamport = 0.000000001 SOL
         priorityFee: window.utils.typeUtils.parseIntDefault(
-          globalSettings.priorityFee,
+          this.priorityFee,
           1
         ),
 
         //Percentage of the priority fees above should be used for all actions except scanning
         lowPriorityFeeMultiplier: window.utils.typeUtils.parseIntDefault(
-          globalSettings.lowPriorityFeeMultiplier,
+          this.lowPriorityFeeMultiplier,
           10
         ),
 
         //Save profile selection to speed up future initialization
         saveProfile: window.utils.typeUtils.parseBoolDefault(
-          globalSettings.saveProfile,
+          this.saveProfile,
           true
         ),
         savedProfile:
-          globalSettings.savedProfile && globalSettings.savedProfile.length > 0
-            ? globalSettings.savedProfile
+          this.savedProfile && this.savedProfile.length > 0
+            ? this.savedProfile
             : [],
 
         //How many milliseconds to wait before re-reading the chain for confirmation
         confirmationCheckingDelay: window.utils.typeUtils.parseIntDefault(
-          globalSettings.confirmationCheckingDelay,
+          this.confirmationCheckingDelay,
           200
         ),
 
         //How much console logging you want to see (higher number = more, 0 = none)
         debugLogLevel: window.utils.typeUtils.parseIntDefault(
-          globalSettings.debugLogLevel,
+          this.debugLogLevel,
           3
         ),
 
         //Determines if your transports should use their ammo banks to move ammo (in addition to their cargo holds)
         transportUseAmmoBank: window.utils.typeUtils.parseBoolDefault(
-          globalSettings.transportUseAmmoBank,
+          this.transportUseAmmoBank,
           true
         ),
 
         //Should transport fleet stop completely if there's an error (example: not enough resource/fuel/etc.)
         transportStopOnError: window.utils.typeUtils.parseBoolDefault(
-          globalSettings.transportStopOnError,
+          this.transportStopOnError,
           true
         ),
 
         //Valid patterns: square, ring, spiral, up, down, left, right, sly
-        scanBlockPattern: scanningPatterns.includes(
-          globalSettings.scanBlockPattern
-        )
-          ? globalSettings.scanBlockPattern
+        scanBlockPattern: scanningPatterns.includes(this.scanBlockPattern)
+          ? this.scanBlockPattern
           : "square",
 
         //Length of the line-based patterns (only applies to up, down, left and right)
         scanBlockLength: window.utils.typeUtils.parseIntDefault(
-          globalSettings.scanBlockLength,
+          this.scanBlockLength,
           5
         ),
 
         //Start from the beginning of the pattern after resupplying at starbase?
         scanBlockResetAfterResupply: window.utils.typeUtils.parseBoolDefault(
-          globalSettings.scanBlockResetAfterResupply,
+          this.scanBlockResetAfterResupply,
           false
         ),
 
         //When true, scanning fleet set to scanMove with low fuel will return to base to resupply fuel + toolkits
         scanResupplyOnLowFuel: window.utils.typeUtils.parseBoolDefault(
-          globalSettings.scanResupplyOnLowFuel,
+          this.scanResupplyOnLowFuel,
           false
         ),
 
         //Number of seconds to wait after a successful scan to allow sector to regenerate
         scanSectorRegenTime: window.utils.typeUtils.parseIntDefault(
-          globalSettings.scanSectorRegenTime,
+          this.scanSectorRegenTime,
           90
         ),
 
         //Number of seconds to wait when sectors probabilities are too low
         scanPauseTime: window.utils.typeUtils.parseIntDefault(
-          globalSettings.scanPauseTime,
+          this.scanPauseTime,
           600
         ),
 
         //Number of seconds to scan a low probability sector before giving up and moving on (or pausing)
         scanStrikeCount: window.utils.typeUtils.parseIntDefault(
-          globalSettings.scanStrikeCount,
+          this.scanStrikeCount,
           3
         ),
 
         //How transparent the status panel should be (1 = completely opaque)
         statusPanelOpacity: window.utils.typeUtils.parseIntDefault(
-          globalSettings.statusPanelOpacity,
+          this.statusPanelOpacity,
           75
         ),
 
         //Should assistant automatically start after initialization is complete?
         autoStartScript: window.utils.typeUtils.parseBoolDefault(
-          globalSettings.autoStartScript,
+          this.autoStartScript,
           false
         ),
 
         //How many fleets need to stall before triggering an automatic page reload? (0 = never trigger)
         reloadPageOnFailedFleets: window.utils.typeUtils.parseIntDefault(
-          globalSettings.reloadPageOnFailedFleets,
+          this.reloadPageOnFailedFleets,
           0
         ),
       };
@@ -6852,39 +6900,40 @@
     }
 
     async addSettingsInput() {
-      document.querySelector("#priorityFee").value = globalSettings.priorityFee;
+      document.querySelector("#priorityFee").value =
+        window.globalSettings.priorityFee;
       document.querySelector("#lowPriorityFeeMultiplier").value =
-        globalSettings.lowPriorityFeeMultiplier;
+        window.globalSettings.lowPriorityFeeMultiplier;
       document.querySelector("#saveProfile").checked =
-        globalSettings.saveProfile;
+        window.globalSettings.saveProfile;
       document.querySelector("#confirmationCheckingDelay").value =
-        globalSettings.confirmationCheckingDelay;
+        window.globalSettings.confirmationCheckingDelay;
       document.querySelector("#debugLogLevel").value =
-        globalSettings.debugLogLevel;
+        window.globalSettings.debugLogLevel;
       document.querySelector("#transportUseAmmoBank").checked =
-        globalSettings.transportUseAmmoBank;
+        window.globalSettings.transportUseAmmoBank;
       document.querySelector("#transportStopOnError").checked =
-        globalSettings.transportStopOnError;
+        window.globalSettings.transportStopOnError;
       document.querySelector("#scanBlockPattern").value =
-        globalSettings.scanBlockPattern;
+        window.globalSettings.scanBlockPattern;
       document.querySelector("#scanBlockLength").value =
-        globalSettings.scanBlockLength;
+        window.globalSettings.scanBlockLength;
       document.querySelector("#scanBlockResetAfterResupply").checked =
-        globalSettings.scanBlockResetAfterResupply;
+        window.globalSettings.scanBlockResetAfterResupply;
       document.querySelector("#scanResupplyOnLowFuel").checked =
-        globalSettings.scanResupplyOnLowFuel;
+        window.globalSettings.scanResupplyOnLowFuel;
       document.querySelector("#scanSectorRegenTime").value =
-        globalSettings.scanSectorRegenTime;
+        window.globalSettings.scanSectorRegenTime;
       document.querySelector("#scanPauseTime").value =
-        globalSettings.scanPauseTime;
+        window.globalSettings.scanPauseTime;
       document.querySelector("#scanStrikeCount").value =
-        globalSettings.scanStrikeCount;
+        window.globalSettings.scanStrikeCount;
       document.querySelector("#statusPanelOpacity").value =
-        globalSettings.statusPanelOpacity;
+        window.globalSettings.statusPanelOpacity;
       document.querySelector("#autoStartScript").checked =
-        globalSettings.autoStartScript;
+        window.globalSettings.autoStartScript;
       document.querySelector("#reloadPageOnFailedFleets").value =
-        globalSettings.reloadPageOnFailedFleets;
+        window.globalSettings.reloadPageOnFailedFleets;
     }
 
     assistCheckToggle() {
@@ -6911,7 +6960,7 @@
           if (i < fleetKeys.length - 1) importText.value += ",";
         }
         importText.value += "}";
-        assistModalToggle();
+        this.assistModalToggle();
       } else {
         targetElem.style.display = "none";
       }
@@ -7217,7 +7266,7 @@
 
       if (errBool === false) {
         errElem[0].innerHTML = "";
-        assistModalToggle();
+        this.assistModalToggle();
       }
     }
 
@@ -7329,7 +7378,7 @@
   window.Fleet = Fleet;
   window.Starbase = Starbase;
   window.User = User;
-  window.settings = new Settings();
+  window.globalSettings = new Settings();
   window.logger = new Logger();
   window.userInterface = new UserInterface();
   window.proxyManager = new ProxyManager();
@@ -7441,7 +7490,7 @@
     "right",
     "sly",
   ];
-  await window.settings.loadGlobalSettings();
+  await window.globalSettings.loadGlobalSettings();
 
   let solanaReadCount = 0;
   let solanaWriteCount = 0;
