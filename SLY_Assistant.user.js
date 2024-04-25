@@ -454,7 +454,9 @@
           let tx = new solanaWeb3.VersionedTransaction(messageV0);
           let txSigned = null;
 
-          debugger;
+          if(DEBUG){
+            debugger;
+          }
 
           if (typeof solflare === "undefined") {
             txSigned =
@@ -2414,7 +2416,7 @@
               userProfileKeyIdx,
             ];
 
-            await GM.setValue(settingsGmKey, JSON.stringify(globalSettings));
+            await GM.setValue(window.globalSettings.settingsGmKey, JSON.stringify(window.globalSettings));
           }
         }
 
@@ -5540,12 +5542,12 @@
         ),
       };
 
-      await GM.setValue(settingsGmKey, JSON.stringify(globalSettings));
+      await GM.setValue(this.settingsGmKey, JSON.stringify(globalSettings));
 
       if (errBool === false) {
         errElem[0].innerHTML = "";
         window.logger.cLog(2, "SYSTEM: Global Settings saved", globalSettings);
-        settingsModalToggle();
+        window.userInterfaceManager.settingsModalToggle();
       }
     }
   }
