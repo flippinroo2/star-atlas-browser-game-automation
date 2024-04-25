@@ -184,7 +184,7 @@
     saRPCs = [
       "https://twilight-autumn-diagram.solana-mainnet.quiknode.pro/4fc53d638efd1cc0f80764bc457944bb325d1ff1", //Quicknode
       // "https://rpc.hellomoon.io/57dbc69d-7e66-4454-b33e-fa6a4b46170f", //Hello Moon
-      // "https://staratl-mainc06-2415.mainnet.rpcpool.com", //Triton
+      "https://staratl-mainc06-2415.mainnet.rpcpool.com", //Triton
       "https://mainnet.helius-rpc.com/?api-key=735486d8-ae86-4d26-829c-e34a2210d119", //Helius
     ];
     readRPCs = this.customReadRPCs.concat(this.saRPCs);
@@ -257,7 +257,6 @@
             isWritable: false,
           },
         ];
-        debugger;
         let tx = {
           instruction: new solanaWeb3.TransactionInstruction({
             keys: keys,
@@ -265,7 +264,6 @@
             //data: []
           }),
         };
-        debugger;
         let txResult = await this.txSignAndSend(tx, fleet, "CreatePDA", 100);
         debugger;
         resolve(txResult);
@@ -3306,17 +3304,17 @@
           );
 
           //Wait a while before trying again
-          await wait(errorWaitTime);
-          await loadFuel();
+          await window.utils.timeUtils.wait(errorWaitTime);
+          await this.loadFuel();
         }
       }
 
       userFleets[i].resupplying = true;
       if (window.globalSettings.scanBlockResetAfterResupply)
         userFleets[i].scanBlockIdx = 0;
-      const baseCoords = ConvertCoords(userFleets[i].starbaseCoord);
+      const baseCoords = window.utils.coordinateUtils.ConvertCoords(userFleets[i].starbaseCoord);
 
-      if (CoordsEqual(fleetCoords, baseCoords)) {
+      if (window.utils.coordinateUtils.CoordsEqual(fleetCoords, baseCoords)) {
         //At starbase
         window.logger.cLog(
           1,
@@ -3324,17 +3322,17 @@
             userFleets[i].label
           )} Resupply: Docking at starbase`
         );
-        await execDock(userFleets[i], userFleets[i].starbaseCoord);
+        await window.Fleet.prototype.execDock(userFleets[i], userFleets[i].starbaseCoord);
 
         window.Fleet.prototype.updateFleetState(userFleets[i], "Unloading");
-        await unloadSDU();
+        await this.unloadSDU();
 
         window.Fleet.prototype.updateFleetState(userFleets[i], "Loading");
         if (userFleets[i].scanCost > 0) await loadFood();
-        await loadFuel();
+        await this.loadFuel();
 
         //Redundancy check to ensure all PDAs are present
-        await createScannerPDAs(userFleets[i]);
+        await window.Scanning.prototype.createScannerPDAs(userFleets[i]);
 
         //Update last op to prevent fleet stall flagging
         userFleets[i].lastOp = Date.now();
@@ -4354,7 +4352,7 @@
           );
 
           if (fleetCoords[0] == starbaseX && fleetCoords[1] == starbaseY) {
-            await this.execDock(userFleets[i], userFleets[i].starbaseCoord);
+            await window.Fleet.prototype.execDock(userFleets[i], userFleets[i].starbaseCoord);
             window.logger.cLog(
               1,
               `${window.utils.timeUtils.FleetTimeStamp(
@@ -4840,7 +4838,14 @@
   }
 
   class ProxyManager {
+    rpcIdx = 0;
+
     async doProxyStuff(target, origMethod, args, rpcs, proxyType) {
+      if (this.rpcIdx > rpcs.length){
+        console.debug("RPC index out of bounds, resetting to 0");
+        this.rpcIdx = 0;
+      }
+
       function isConnectivityError(error) {
         return (
           Number(error.message.slice(0, 3)) > 299 ||
@@ -4862,11 +4867,10 @@
         );
         if (isConnectivityError(error1)) {
           let success = false;
-          let rpcIdx = 1;
-          while (!success && rpcIdx < rpcs.length) {
-            window.logger.cLog(2, `${proxyType} trying ${rpcs[rpcIdx]}`);
+          while (!success && this.rpcIdx < rpcs.length) {
+            window.logger.cLog(2, `${proxyType} trying ${rpcs[this.rpcIdx]}`);
             const newConnection = new solanaWeb3.Connection(
-              rpcs[rpcIdx],
+              rpcs[this.rpcIdx],
               "confirmed"
             );
             try {
@@ -4878,7 +4882,9 @@
                 return error2;
               }
             }
-            rpcIdx = rpcIdx + 1 < rpcs.length ? rpcIdx + 1 : 0;
+            console.debug(`Old rpcIdx is ${this.rpcIdx}`);
+            this.rpcIdx = this.rpcIdx + 1 < rpcs.length ? this.rpcIdx + 1 : 0;
+            console.debug(`New rpcIdx is ${this.rpcIdx}`);
 
             //Prevent spam if errors are occurring immediately (disconnected from internet / unplugged cable)
             await window.utils.timeUtils.wait(500);
@@ -4970,6 +4976,8 @@
     }
 
     async createScannerPDAs(fleet) {
+      return; // TODO: Remove this hard coded return statement
+      debugger;
       window.logger.cLog(
         2,
         `${window.utils.timeUtils.FleetTimeStamp(
@@ -5175,7 +5183,7 @@
         fleetCoords[1] !== destCoords[1]
       ) {
         if (!userFleets[i].state.includes("Warp C/D")) {
-          const starbaseCoords = ConvertCoords(userFleets[i].starbaseCoord);
+          const starbaseCoords = window.utils.coordinateUtils.ConvertCoords(userFleets[i].starbaseCoord);
           //window.logger.cLog(4, `${window.utils.timeUtils.FleetTimeStamp(userFleets[i].label)} starbaseCoords: ${starbaseCoords}`);
 
           let fuelNeeded = 0;
@@ -5696,8 +5704,8 @@
 
   class Transport {
     async handleTransport(i, fleetState, fleetCoords) {
-      const [destX, destY] = ConvertCoords(userFleets[i].destCoord);
-      const [starbaseX, starbaseY] = ConvertCoords(userFleets[i].starbaseCoord);
+      const [destX, destY] = window.utils.coordinateUtils.ConvertCoords(userFleets[i].destCoord);
+      const [starbaseX, starbaseY] = window.utils.coordinateUtils.ConvertCoords(userFleets[i].starbaseCoord);
 
       const fleetParsedData = JSON.parse(
         await GM.getValue(userFleets[i].publicKey.toString(), "{}")
@@ -5738,15 +5746,15 @@
           amt: fleetParsedData.transportSBResource4Perc,
         },
       ];
-      const hasTargetManifest = hasTransportManifest(targetCargoManifest);
-      const hasStarbaseManifest = hasTransportManifest(starbaseCargoManifest);
+      const hasTargetManifest = this.hasTransportManifest(targetCargoManifest);
+      const hasStarbaseManifest = this.hasTransportManifest(starbaseCargoManifest);
 
       //let moveDist = window.Movement.prototype.calculateMovementDistance([starbaseX,starbaseY], [destX,destY]);
       if (fleetState === "Idle") {
         // Fleet at starbase?
         if (fleetCoords[0] == starbaseX && fleetCoords[1] == starbaseY) {
           userFleets[i].resupplying = true;
-          await execDock(userFleets[i], userFleets[i].starbaseCoord);
+          await window.Fleet.prototype.execDock(userFleets[i], userFleets[i].starbaseCoord);
 
           if (hasStarbaseManifest) {
             await handleTransportUnloading(
@@ -5815,7 +5823,7 @@
         // Fleet at target?
         else if (fleetCoords[0] == destX && fleetCoords[1] == destY) {
           userFleets[i].resupplying = true;
-          await execDock(userFleets[i], userFleets[i].destCoord);
+          await window.Fleet.prototype.execDock(userFleets[i], userFleets[i].destCoord);
 
           //Unloading at Target
           let fuelUnloadDeficit = 0; //How far short of the manifest was the amount of fuel unloaded?
@@ -7205,9 +7213,6 @@
     }
 
     async saveAssistInput() {
-      function validateCoordInput(coord) {
-        return coord ? coord.replace(".", ",") : "";
-      }
       let fleetRows = document.querySelectorAll(
         "#assistModal .assist-fleet-row"
       );
@@ -7234,10 +7239,10 @@
         let fleetPK = row.getAttribute("pk");
         let fleetName = row.children[0].firstChild.innerText;
         let fleetAssignment = row.children[1].firstChild.value;
-        let fleetDestCoord = validateCoordInput(
+        let fleetDestCoord = window.utils.coordinateUtils.validateCoordInput(
           row.children[2].firstChild.value
         ); //fleetDestCoord = fleetDestCoord ? fleetDestCoord.replace('.', ',') : fleetDestCoord;
-        let fleetStarbaseCoord = validateCoordInput(
+        let fleetStarbaseCoord = window.utils.coordinateUtils.validateCoordInput(
           row.children[3].firstChild.value
         ); //fleetStarbaseCoord = fleetStarbaseCoord ? fleetStarbaseCoord.replace('.', ',') : fleetStarbaseCoord;
         let subwarpPref = row.children[4].firstChild.checked;
@@ -7246,8 +7251,8 @@
         });
         let moveType = subwarpPref == true ? "subwarp" : "warp";
 
-        const destCoords = ConvertCoords(fleetDestCoord);
-        const starbaseCoords = ConvertCoords(fleetStarbaseCoord);
+        const destCoords = window.utils.coordinateUtils.ConvertCoords(fleetDestCoord);
+        const starbaseCoords = window.utils.coordinateUtils.ConvertCoords(fleetStarbaseCoord);
 
         if (fleetAssignment !== "") {
           //let warpCost = calculateWarpFuelBurn(userFleets[userFleetIndex], moveDist);
@@ -7555,6 +7560,9 @@
           Number(a[0]) === Number(b[0]) &&
           Number(a[1]) === Number(b[1])
         );
+      },
+      validateCoordInput: function(coord) {
+        return coord ? coord.replace(".", ",") : "";
       },
     },
     timeUtils: {
