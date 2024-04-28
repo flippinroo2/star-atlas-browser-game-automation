@@ -21,7 +21,7 @@
 	//Used for reading solana data
 	let customReadRPCs = [];
 
-	//Used for pushing transactions to solana chain
+	//Used for pushing transactions to Solana chain
 	let customWriteRPCs = [];
 
     let saRPCs = [

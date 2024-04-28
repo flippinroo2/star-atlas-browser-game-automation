@@ -15,6 +15,20 @@
 // @grant        GM_listValues
 // ==/UserScript==
 
+// [2] [13:40] <DOCK> txHash 4mQQ6SejcnfRfhpyDYsr9j6KNCwJ3XuPVSvP99jKVjSQhUvNtaCYvL2t5nizN5RpP1fcNVTQSYsNeyxV9VNYTMcb
+// 13:40:12.190 userscript.html?name=SLY-Assistant.user.js&id=4bad0a64-a611-45be-9c07-46170d1b7fb9:49590 [1] [13:40] Mining.prototype.handleMining -> fleet: (2) [-8, -24] starbase: (2) ['-8', '-24'] target: (2) ['-8', '-24']
+// 13:40:12.190 userscript.html?name=SLY-Assistant.user.js&id=4bad0a64-a611-45be-9c07-46170d1b7fb9:49590 [1] [13:40] calcWarpFuelReq: Same coords (2) [-8, -24] (2) ['-8', '-24']
+// 13:40:12.191 userscript.html?name=SLY-Assistant.user.js&id=4bad0a64-a611-45be-9c07-46170d1b7fb9:49590 [1] [13:40] calcWarpFuelReq: Same coords (2) ['-8', '-24'] (2) ['-8', '-24']
+// 13:40:12.191 userscript.html?name=SLY-Assistant.user.js&id=4bad0a64-a611-45be-9c07-46170d1b7fb9:49590 [1] [13:40] Need resupply
+// 13:40:12.191 userscript.html?name=SLY-Assistant.user.js&id=4bad0a64-a611-45be-9c07-46170d1b7fb9:49590 [1] [13:40] Calculated miningDuration: 2241
+// 13:40:12.191 userscript.html?name=SLY-Assistant.user.js&id=4bad0a64-a611-45be-9c07-46170d1b7fb9:49590 [1] [13:40] fuel: 31551/428
+// 13:40:12.191 userscript.html?name=SLY-Assistant.user.js&id=4bad0a64-a611-45be-9c07-46170d1b7fb9:49590 [1] [13:40] ammo: 10671/1849
+// 13:40:12.191 userscript.html?name=SLY-Assistant.user.js&id=4bad0a64-a611-45be-9c07-46170d1b7fb9:49590 [1] [13:40] food: 0/256
+
+// [test] [15:09] 🚚 Unloading Transport
+// Unload CARBWKWvxEuMcq3MqCxYfi7UoFVpL9c4rsQS99tw6i4X skipped - none found in ship's cargo hold
+// [test] [15:09] ⛽ Refueling
+
 (async function () {
   "use strict";
 
@@ -22,9 +36,9 @@
 
   class Action {
     ActionType = {
-      MINE: "MINE",
-      SCAN: "SCAN",
-      TRANSPORT: "TRANSPORT",
+      MINE: "mine",
+      SCAN: "scan",
+      TRANSPORT: "transport",
     };
   }
 
@@ -121,9 +135,10 @@
     }
 
     async getAccountInfo(fleetName, reason, params) {
-      logger.cLog(
-        3,
-        `${utils.timeUtils.FleetTimeStamp(fleetName)} get ${reason}`
+      logger.log(
+        5,
+        `${utils.timeUtils.FleetTimeStamp(fleetName)} get ${reason}`,
+        params
       );
       return await blockchainManager.getAccountInfo(params);
     }
@@ -189,10 +204,12 @@
     ];
     readRPCs = this.customReadRPCs.concat(this.saRPCs);
     writeRPCs = [];
+    rawSolanaReadConnection = null;
+    rawSolanaWriteConnection = null;
     solanaReadConnection = null;
     solanaWriteConnection = null;
 
-    constructor(readConnectionProxy, writeConnectionProxy) {
+    constructor(proxyManager) {
       // this.readRPCs = this.customReadRPCs.concat(this.saRPCs);
       this.writeRPCs = this.customWriteRPCs.concat(this.saRPCs);
       const readIdx =
@@ -205,20 +222,21 @@
           ? 0
           : Math.floor(Math.random() * this.saRPCs.length);
       this.writeIdx = writeIdx;
-      const rawSolanaReadConnection = new solanaWeb3.Connection(
+      this.rawSolanaReadConnection = new solanaWeb3.Connection(
         this.readRPCs[readIdx],
         "confirmed"
       );
-      const rawSolanaWriteConnection = new solanaWeb3.Connection(
+      this.rawSolanaWriteConnection = new solanaWeb3.Connection(
         this.writeRPCs[writeIdx],
         "confirmed"
       );
+      debugger;
       this.solanaReadConnection = new Proxy(
-        rawSolanaReadConnection,
+        this.rawSolanaReadConnection,
         readConnectionProxy
       );
       this.solanaWriteConnection = new Proxy(
-        rawSolanaWriteConnection,
+        this.rawSolanaWriteConnection,
         writeConnectionProxy
       );
     }
@@ -337,11 +355,9 @@
           preflightCommitment: "confirmed",
         }
       );
-      logger.cLog(
+      logger.log(
         3,
-        `${utils.timeUtils.FleetTimeStamp(
-          fleet.label
-        )} <${opName}> txHash`,
+        `${utils.timeUtils.FleetTimeStamp(fleet.label)} <${opName}> txHash`,
         txHash
       );
 
@@ -356,11 +372,9 @@
         ) {
           return { txHash, confirmation: signatureStatus };
         } else if (signatureStatus.err) {
-          logger.cLog(
+          logger.log(
             3,
-            `${utils.timeUtils.FleetTimeStamp(
-              fleet.label
-            )} <${opName}> Err`,
+            `${utils.timeUtils.FleetTimeStamp(fleet.label)} <${opName}> Err`,
             signatureStatus.err
           );
           return { txHash, confirmation: signatureStatus };
@@ -375,11 +389,9 @@
         curBlockHeight = epochInfo.blockHeight;
       }
 
-      logger.cLog(
+      logger.log(
         3,
-        `${utils.timeUtils.FleetTimeStamp(
-          fleet.label
-        )} <${opName}> TRYING 🌐`
+        `${utils.timeUtils.FleetTimeStamp(fleet.label)} <${opName}> TRYING 🌐`
       );
       return await this.sendAndConfirmTx(
         txSerialized,
@@ -395,8 +407,7 @@
         const fleetName = fleet ? fleet.label : "unknown";
         let macroOpStart = Date.now();
         if (!priorityFeeMultiplier)
-          priorityFeeMultiplier =
-            globalSettings.lowPriorityFeeMultiplier;
+          priorityFeeMultiplier = globalSettings.lowPriorityFeeMultiplier;
         priorityFeeMultiplier = priorityFeeMultiplier / 100;
 
         let confirmed = false;
@@ -410,7 +421,7 @@
                 )
               )
             : 0; //Convert Lamports to microLamports ?
-          logger.cLog(
+          logger.log(
             4,
             `${utils.timeUtils.FleetTimeStamp(
               fleetName
@@ -418,13 +429,13 @@
           );
           /*
           if (priorityFee > 0) tx.add(solanaWeb3.ComputeBudgetProgram.setComputeUnitPrice({microLamports: priorityFee}));
-  
+
           if (ix.constructor === Array) {
             ix.forEach(item => tx.add(item.instruction))
           } else {
             tx.add(ix.instruction);
           }
-  
+
           let latestBH = await this.solanaReadConnection.getLatestBlockhash('confirmed');
           tx.recentBlockhash = latestBH.blockhash;
           tx.lastValidBlockHeight = latestBH.lastValidBlockHeight-150;
@@ -454,7 +465,7 @@
           let tx = new solanaWeb3.VersionedTransaction(messageV0);
           let txSigned = null;
 
-          if(DEBUG){
+          if (DEBUG) {
             debugger;
           }
 
@@ -470,11 +481,9 @@
           let txSerialized = await txSigned[0].serialize();
 
           let microOpStart = Date.now();
-          logger.cLog(
+          logger.log(
             2,
-            `${utils.timeUtils.FleetTimeStamp(
-              fleetName
-            )} <${opName}> SEND ➡️`
+            `${utils.timeUtils.FleetTimeStamp(fleetName)} <${opName}> SEND ➡️`
           );
           let response = await this.sendAndConfirmTx(
             txSerialized,
@@ -502,8 +511,8 @@
               txResult.meta.err.InstructionError)
           ) {
             Fleet.prototype.updateFleetState(fleet, "ERROR: Ix Error");
-            logger.cLog(
-              2,
+            logger.log(
+              Logger.LOG_LEVEL_ENUM.CRITICAL,
               `${utils.timeUtils.FleetTimeStamp(
                 fleetName
               )} <${opName}> ERROR ❌ The instruction resulted in an error.`
@@ -522,14 +531,14 @@
             confirmation.name == "TransactionExpiredBlockheightExceededError" &&
             !txResult
           ) {
-            logger.cLog(
-              2,
+            logger.log(
+              Logger.LOG_LEVEL_ENUM.CRITICAL,
               `${utils.timeUtils.FleetTimeStamp(
                 fleetName
               )} <${opName}> CONFIRM ❌ ${confirmationTimeStr}`
             );
-            logger.cLog(
-              2,
+            logger.log(
+              Logger.LOG_LEVEL_ENUM.WARN,
               `${utils.timeUtils.FleetTimeStamp(
                 fleetName
               )} <${opName}> RESEND 🔂`
@@ -554,14 +563,14 @@
           }
 
           if (tryCount > 1)
-            logger.cLog(
-              3,
+            logger.log(
+              Logger.LOG_LEVEL_ENUM.DEBUG,
               `${utils.timeUtils.FleetTimeStamp(
                 fleetName
               )} Got txResult in ${tryCount} tries`,
               txResult
             );
-          logger.cLog(
+          logger.log(
             2,
             `${utils.timeUtils.FleetTimeStamp(
               fleetName
@@ -571,7 +580,7 @@
 
           const fullMsTaken = Date.now() - macroOpStart;
           const secondsTaken = Math.round(fullMsTaken / 1000);
-          logger.cLog(
+          logger.log(
             1,
             `${utils.timeUtils.FleetTimeStamp(
               fleetName
@@ -671,7 +680,7 @@
         !utils.coordinateUtils.CoordsValid(startCoords) ||
         !utils.coordinateUtils.CoordsValid(endCoords)
       ) {
-        logger.cLog(
+        logger.log(
           4,
           `${utils.timeUtils.FleetTimeStamp(
             fleet.label
@@ -682,7 +691,7 @@
         return 0;
       }
       if (utils.coordinateUtils.CoordsEqual(startCoords, endCoords)) {
-        logger.cLog(
+        logger.log(
           4,
           `${utils.timeUtils.FleetTimeStamp(
             fleet.label
@@ -716,7 +725,7 @@
         jumps++;
       }
 
-      //logger.cLog(4, `${utils.timeUtils.FleetTimeStamp(fleet.label)} calcWarpFuelReq: ${fuelRequired} fuel over ${jumps} jumps`);
+      //logger.log(Logger.LOG_LEVEL_ENUM.DEBUG, `${utils.timeUtils.FleetTimeStamp(fleet.label)} calcWarpFuelReq: ${fuelRequired} fuel over ${jumps} jumps`);
       return fuelRequired;
     }
 
@@ -851,7 +860,7 @@
         };
 
         cLog(
-          1,
+          Logger.LOG_LEVEL_ENUM.INFO,
           `${utils.timeUtils.FleetTimeStamp(fleet.label)} Exiting Warp`
         );
         this.updateFleetState(fleet, "Exiting Warp");
@@ -863,7 +872,7 @@
         );
 
         cLog(
-          1,
+          Logger.LOG_LEVEL_ENUM.INFO,
           `${utils.timeUtils.FleetTimeStamp(fleet.label)} Idle 💤`
         );
         this.updateFleetState(fleet, "Idle");
@@ -980,9 +989,7 @@
 
         cLog(
           1,
-          `${utils.timeUtils.FleetTimeStamp(
-            fleet.label
-          )} Exiting Subwarp`
+          `${utils.timeUtils.FleetTimeStamp(fleet.label)} Exiting Subwarp`
         );
         this.updateFleetState(fleet, "Exiting Subwarp");
 
@@ -993,7 +1000,7 @@
         );
 
         cLog(
-          1,
+          Logger.LOG_LEVEL_ENUM.INFO,
           `${utils.timeUtils.FleetTimeStamp(fleet.label)} Idle 💤`
         );
         this.updateFleetState(fleet, "Idle");
@@ -1031,7 +1038,7 @@
         };
 
         const coordStr = `[${destX},${destY}]`;
-        logger.cLog(
+        logger.log(
           1,
           `${utils.timeUtils.FleetTimeStamp(
             fleet.label
@@ -1095,7 +1102,7 @@
         };
 
         const coordStr = `[${destX},${destY}]`;
-        logger.cLog(
+        logger.log(
           1,
           `${utils.timeUtils.FleetTimeStamp(
             fleet.label
@@ -1103,11 +1110,7 @@
         );
         this.updateFleetState(fleet, "Warping");
 
-        let txResult = await blockchainManager.txSignAndSend(
-          tx,
-          fleet,
-          "WARP"
-        );
+        let txResult = await blockchainManager.txSignAndSend(tx, fleet, "WARP");
 
         const travelEndTime = utils.timeUtils.TimeToStr(
           new Date(Date.now() + (moveTime * 1000 + 10000))
@@ -1164,20 +1167,13 @@
             .instruction(),
         };
 
-        logger.cLog(
-          1,
-          `${utils.timeUtils.FleetTimeStamp(fleet.label)} Docking`
-        );
+        logger.log(1, `${utils.timeUtils.FleetTimeStamp(fleet.label)} Docking`);
         this.updateFleetState(fleet, "Docking");
 
-        let txResult = await blockchainManager.txSignAndSend(
-          tx,
-          fleet,
-          "DOCK"
-        );
+        let txResult = await blockchainManager.txSignAndSend(tx, fleet, "DOCK");
 
-        logger.cLog(
-          1,
+        logger.log(
+          Logger.LOG_LEVEL_ENUM.INFO,
           `${utils.timeUtils.FleetTimeStamp(fleet.label)} Docked`
         );
         this.updateFleetState(fleet, "Docked");
@@ -1229,7 +1225,7 @@
             .instruction(),
         };
 
-        logger.cLog(
+        logger.log(
           1,
           `${utils.timeUtils.FleetTimeStamp(fleet.label)} Undocking`
         );
@@ -1249,8 +1245,9 @@
     }
 
     async execStartupUndock(i, assignment) {
+      debugger;
       const fleet = userFleets[i];
-      logger.cLog(
+      logger.log(
         1,
         `${utils.timeUtils.FleetTimeStamp(
           fleet.label
@@ -1283,11 +1280,9 @@
         await handleResupply(i, fleetsCoords);
       }
 
-      logger.cLog(
+      logger.log(
         1,
-        `${utils.timeUtils.FleetTimeStamp(
-          fleet.label
-        )} Undock Startup Complete`
+        `${utils.timeUtils.FleetTimeStamp(fleet.label)} Undock Startup Complete`
       );
     }
 
@@ -1339,11 +1334,7 @@
         );
         this.updateFleetState(fleet, "Warping");
 
-        let txResult = await blockchainManager.txSignAndSend(
-          tx,
-          fleet,
-          "WARP"
-        );
+        let txResult = await blockchainManager.txSignAndSend(tx, fleet, "WARP");
 
         const travelEndTime = utils.timeUtils.TimeToStr(
           new Date(Date.now() + (moveTime * 1000 + 10000))
@@ -1383,8 +1374,8 @@
 
         if (fleet.lastOp) {
           if (Date.now() - foo > 600000) {
-            logger.cLog(
-              3,
+            logger.log(
+              Logger.LOG_LEVEL_ENUM.DEBUG,
               `${utils.timeUtils.FleetTimeStamp(
                 userFleets[i].label
               )} Unresponsive`,
@@ -1413,7 +1404,7 @@
         fleetStallCount &&
         globalSettings.reloadPageOnFailedFleets <= fleetStallCount
       ) {
-        logger.cLog(
+        logger.log(
           1,
           `ASSISTANT: ${fleetStallCount} fleets have stalled - reloading ...`
         );
@@ -1426,7 +1417,7 @@
     }
 
     async fuelFleet(fleet, dockCoords, account, amount) {
-      logger.cLog(
+      logger.log(
         1,
         `${utils.timeUtils.FleetTimeStamp(
           fleet.label
@@ -1436,22 +1427,21 @@
         (item) =>
           item.account.mint.toString() == sageGameAcct.account.mints.fuel
       );
-      const fuelResp =
-        await Starbase.prototype.execCargoFromStarbaseToFleet(
-          fleet,
-          fleet.fuelTank,
-          account,
-          sageGameAcct.account.mints.fuel.toString(),
-          fuelCargoTypeAcct,
-          dockCoords,
-          amount
-        );
+      const fuelResp = await Starbase.prototype.execCargoFromStarbaseToFleet(
+        fleet,
+        fleet.fuelTank,
+        account,
+        sageGameAcct.account.mints.fuel.toString(),
+        fuelCargoTypeAcct,
+        dockCoords,
+        amount
+      );
 
       return fuelResp;
     }
 
     async getAccountInfo(fleetName, reason, params) {
-      logger.cLog(
+      logger.log(
         3,
         `${utils.timeUtils.FleetTimeStamp(fleetName)} get ${reason}`
       );
@@ -1487,7 +1477,7 @@
         ? token.account.data.parsed.info.tokenAmount.uiAmount
         : 0;
 
-      //logger.cLog(4, `${utils.timeUtils.FleetTimeStamp(fleet.label)} getFleetFuelData -> calcWarpFuelReq:`, currentPos, targetPos);
+      //logger.log(Logger.LOG_LEVEL_ENUM.DEBUG, `${utils.timeUtils.FleetTimeStamp(fleet.label)} Fleet.prototype.getFleetFuelData -> calcWarpFuelReq:`, currentPos, targetPos);
       return {
         account,
         token,
@@ -1690,14 +1680,18 @@
       amountToDropOff = 0,
       transportManifest
     ) {
-      logger.cLog(
+      logger.log(
         1,
         `${utils.timeUtils.FleetTimeStamp(fleet.label)} ⛽ Refueling`
       );
       this.updateFleetState(fleet, "Refueling");
       let fuelResp = { status: 0, detail: "", amount: 0 };
 
-      const fuelData = await getFleetFuelData(fleet, currentPos, targetPos);
+      const fuelData = await this.getFleetFuelData(
+        fleet,
+        currentPos,
+        targetPos
+      );
 
       //Calculate fuel needed
       const costMultiplier = roundTrip ? 2 : 1;
@@ -1710,7 +1704,7 @@
       } else fuelNeeded = fuelData.subwarpCost * costMultiplier;
 
       if (fuelNeeded > fuelData.capacity) {
-        logger.cLog(
+        logger.log(
           1,
           `${utils.timeUtils.FleetTimeStamp(
             fleet.label
@@ -1726,31 +1720,31 @@
 
       //Log fuel readouts
       const extraFuel = Math.floor(fuelData.amount - fuelNeeded);
-      logger.cLog(
+      logger.log(
         2,
         `${utils.timeUtils.FleetTimeStamp(fleet.label)} Current Fuel: ${
           fuelData.amount
         }`
       );
-      logger.cLog(
+      logger.log(
         2,
         `${utils.timeUtils.FleetTimeStamp(fleet.label)} Warp Cost: ${
           fuelData.warpCost
         }`
       );
-      logger.cLog(
+      logger.log(
         2,
         `${utils.timeUtils.FleetTimeStamp(fleet.label)} Subwarp Cost: ${
           fuelData.subwarpCost
         }`
       );
-      logger.cLog(
+      logger.log(
         2,
-        `${utils.timeUtils.FleetTimeStamp(
-          fleet.label
-        )} Fuel To Transport: ${fuelEntry.amt}`
+        `${utils.timeUtils.FleetTimeStamp(fleet.label)} Fuel To Transport: ${
+          fuelEntry.amt
+        }`
       );
-      logger.cLog(
+      logger.log(
         2,
         `${utils.timeUtils.FleetTimeStamp(
           fleet.label
@@ -1761,7 +1755,7 @@
       if (amountToDropOff > 0) {
         const fuelToUnload = Math.min(amountToDropOff, extraFuel);
         if (fuelToUnload > 0) {
-          logger.cLog(
+          logger.log(
             1,
             `${utils.timeUtils.FleetTimeStamp(
               fleet.label
@@ -1798,7 +1792,7 @@
       );
 
       if (execResp && execResp.name == "NotEnoughResource") {
-        logger.cLog(
+        logger.log(
           1,
           `${utils.timeUtils.FleetTimeStamp(
             fleet.label
@@ -1814,11 +1808,9 @@
     }
 
     async handleTransportUnloading(fleet, starbaseCoord, transportManifest) {
-      logger.cLog(
+      logger.log(
         1,
-        `${utils.timeUtils.FleetTimeStamp(
-          fleet.label
-        )} 🚚 Unloading Transport`
+        `${utils.timeUtils.FleetTimeStamp(fleet.label)} 🚚 Unloading Transport`
       );
       this.updateFleetState(fleet, "Unloading");
 
@@ -1848,8 +1840,8 @@
           if (isAmmo) ammoUnloadDeficit = entry.amt;
           const amountToUnload = Math.min(currentResCnt, entry.amt);
           if (amountToUnload > 0) {
-            logger.cLog(
-              1,
+            logger.log(
+              Logger.LOG_LEVEL_ENUM.ERROR,
               `${utils.timeUtils.FleetTimeStamp(
                 fleet.label
               )} Unloading ${amountToUnload} ${entry.res}`
@@ -1864,8 +1856,8 @@
             if (isFuel) fuelUnloadDeficit -= amountToUnload;
             if (isAmmo) ammoUnloadDeficit -= amountToUnload;
           } else {
-            logger.cLog(
-              1,
+            logger.log(
+              Logger.LOG_LEVEL_ENUM.ERROR,
               `${utils.timeUtils.FleetTimeStamp(fleet.label)} Unload ${
                 entry.res
               } skipped - none found in ship's cargo hold`
@@ -1894,7 +1886,7 @@
           : 0;
         let ammoToUnload = Math.min(currentAmmoCnt, ammoUnloadDeficit);
         if (ammoToUnload > 0) {
-          logger.cLog(
+          logger.log(
             1,
             `${utils.timeUtils.FleetTimeStamp(
               fleet.label
@@ -1914,7 +1906,7 @@
     }
 
     async handleTransportLoading(i, starbaseCoords, transportManifest) {
-      logger.cLog(
+      logger.log(
         1,
         `${utils.timeUtils.FleetTimeStamp(
           userFleets[i].label
@@ -1933,7 +1925,7 @@
         : 0;
 
       //Calculate remaining free cargo space
-      logger.cLog(
+      logger.log(
         2,
         `${utils.timeUtils.FleetTimeStamp(
           userFleets[i].label
@@ -1953,7 +1945,7 @@
         0
       );
       let cargoSpace = userFleets[i].cargoCapacity - cargoCnt;
-      logger.cLog(
+      logger.log(
         2,
         `${utils.timeUtils.FleetTimeStamp(
           userFleets[i].label
@@ -1967,8 +1959,8 @@
             cargoSpace <=
             cargoItems.find((r) => r.token == entry.res).size * entry.res
           ) {
-            logger.cLog(
-              1,
+            logger.log(
+              Logger.LOG_LEVEL_ENUM.ERROR,
               `${utils.timeUtils.FleetTimeStamp(
                 userFleets[i].label
               )} Cargo full - remaining loading process skipped`
@@ -2003,31 +1995,30 @@
             isAmmo ? entry.amt - ammoLoadingIntoAmmoBank : entry.amt
           );
           if (resMax > 0) {
-            logger.cLog(
-              1,
+            logger.log(
+              Logger.LOG_LEVEL_ENUM.ERROR,
               `${utils.timeUtils.FleetTimeStamp(
                 userFleets[i].label
               )} Attempting to load ${resMax} ${
                 entry.res
               } from ${starbaseCoords}`
             );
-            const resp =
-              await Starbase.prototype.execCargoFromStarbaseToFleet(
-                userFleets[i],
-                userFleets[i].cargoHold,
-                fleetResAcct,
-                entry.res,
-                resCargoTypeAcct,
-                starbaseCoords,
-                resMax
-              );
+            const resp = await Starbase.prototype.execCargoFromStarbaseToFleet(
+              userFleets[i],
+              userFleets[i].cargoHold,
+              fleetResAcct,
+              entry.res,
+              resCargoTypeAcct,
+              starbaseCoords,
+              resMax
+            );
             cargoSpace -= resMax;
 
             if (resp && resp.name == "NotEnoughResource") {
               const resShort = cargoItems.find(
                 (r) => r.token == entry.res
               ).name;
-              logger.cLog(
+              logger.log(
                 1,
                 `${utils.timeUtils.FleetTimeStamp(
                   userFleets[i].label
@@ -2042,7 +2033,7 @@
       //const fleetCurrentCargo = await blockchainManager.solanaReadConnection.getParsedTokenAccountsByOwner(userFleets[i].cargoHold, {programId: blockchainManager.tokenProgramPK});
       //const cargoCnt = fleetCurrentCargo.value.reduce((n, {account}) => n + account.data.parsed.info.tokenAmount.uiAmount, 0);
 
-      //logger.cLog(3,`${utils.timeUtils.FleetTimeStamp(userFleets[i].label)} Loading finished with ${cargoCnt} total cargo loaded`);
+      //logger.log(Logger.LOG_LEVEL_ENUM.INFO,`${utils.timeUtils.FleetTimeStamp(userFleets[i].label)} Loading finished with ${cargoCnt} total cargo loaded`);
       return !userFleets[i].state.includes("ERROR");
     }
 
@@ -2066,8 +2057,8 @@
       const waitingForScan =
         userFleets[i].scanEnd && Date.now() <= userFleets[i].scanEnd;
       if (moving)
-        logger.cLog(
-          2,
+        logger.log(
+          Logger.LOG_LEVEL_ENUM.VERBOSE,
           `${utils.timeUtils.FleetTimeStamp(
             userFleets[i].label
           )} Operating moving fleet`
@@ -2085,8 +2076,8 @@
         //if(!fleetParsedData.assignment) return;
 
         userFleets[i].iterCnt++;
-        logger.cLog(
-          2,
+        logger.log(
+          Logger.LOG_LEVEL_ENUM.VERBOSE,
           `${utils.timeUtils.FleetTimeStamp(
             userFleets[i].label
           )} <getAccountInfo> (${userFleets[i].state})`
@@ -2097,7 +2088,7 @@
           userFleets[i].publicKey
         );
         let [fleetState, extra] = this.getFleetState(fleetAcctInfo);
-        logger.cLog(
+        logger.log(
           3,
           `${utils.timeUtils.FleetTimeStamp(
             userFleets[i].label
@@ -2109,7 +2100,7 @@
 
         //Correct rare fleet state mismatch bug
         if (moving && fleetState == "Idle") {
-          logger.cLog(
+          logger.log(
             1,
             `${utils.timeUtils.FleetTimeStamp(
               userFleets[i].label
@@ -2131,7 +2122,7 @@
               fleetParsedData.assignment
             );
         } else if (fleetState == "MoveWarp" || fleetState == "MoveSubwarp") {
-          logger.cLog(
+          logger.log(
             2,
             `${utils.timeUtils.FleetTimeStamp(
               userFleets[i].label
@@ -2163,17 +2154,15 @@
             fleetState == "MineAsteroid" &&
             !userFleets[i].state.includes("Mine")
           ) {
-            logger.cLog(
-              1,
+            logger.log(
+              Logger.LOG_LEVEL_ENUM.ERROR,
               `${utils.timeUtils.FleetTimeStamp(
                 userFleets[i].label
               )} Fleet State Mismatch - Updating to Mining again`
             );
             this.updateFleetState(
               userFleets[i],
-              "Mine [" +
-                utils.timeUtils.TimeToStr(new Date(Date.now())) +
-                "]"
+              "Mine [" + utils.timeUtils.TimeToStr(new Date(Date.now())) + "]"
             );
           }
           await Mining.prototype.handleMining(
@@ -2183,14 +2172,14 @@
             fleetMining
           );
         } else if (fleetParsedData.assignment == "Transport") {
-          await game.handleTransport(
+          await Transport.prototype.handleTransport(
             i,
             userFleets[i].state,
             fleetCoords
           );
         }
       } catch (err) {
-        logger.cLog(
+        logger.log(
           1,
           `${utils.timeUtils.FleetTimeStamp(userFleets[i].label)} ERROR`,
           err
@@ -2206,7 +2195,7 @@
       const fleet = userFleets[i];
 
       try {
-        //logger.cLog(1,`${utils.timeUtils.FleetTimeStamp(userFleets[i].label)} Operating fleet ...`);
+        //logger.log(Logger.LOG_LEVEL_ENUM.INFO,`${utils.timeUtils.FleetTimeStamp(userFleets[i].label)} Operating fleet ...`);
         const fleetSavedData = await GM.getValue(
           fleet.publicKey.toString(),
           "{}"
@@ -2233,7 +2222,7 @@
         }
       } catch (error) {
         extraTime = 20000;
-        logger.cLog(
+        logger.log(
           1,
           `${utils.timeUtils.FleetTimeStamp(
             fleet.label
@@ -2323,8 +2312,8 @@
           globalSettings.savedProfile &&
           globalSettings.savedProfile.length > 0
         ) {
-          logger.cLog(
-            1,
+          logger.log(
+            Logger.LOG_LEVEL_ENUM.INFO,
             "Skipping User Profile query, using saved profile"
           );
           userProfileAcct = new solanaWeb3.PublicKey(
@@ -2332,14 +2321,21 @@
           );
           userProfileKeyIdx = globalSettings.savedProfile[1];
         } else {
-          logger.cLog(1, "Getting User Profiles (this takes a while)");
+          logger.log(
+            Logger.LOG_LEVEL_ENUM.INFO,
+            "Getting User Profiles (this takes a while)"
+          );
           let userProfiles =
             await blockchainManager.solanaReadConnection.getProgramAccounts(
               blockchainManager.profileProgramPK
             );
           let foundProf = [];
 
-          logger.cLog(2, "initUser: userProfiles[0]", userProfiles[0]);
+          logger.log(
+            Logger.LOG_LEVEL_ENUM.INFO,
+            "initUser: userProfiles[0]",
+            userProfiles[0]
+          );
           for (let userProf of userProfiles) {
             let userProfData = userProf.account.data.subarray(30);
             let iter = 0;
@@ -2416,7 +2412,10 @@
               userProfileKeyIdx,
             ];
 
-            await GM.setValue(globalSettings.settingsGmKey, JSON.stringify(globalSettings));
+            await GM.setValue(
+              globalSettings.settingsGmKey,
+              JSON.stringify(globalSettings)
+            );
           }
         }
 
@@ -2464,7 +2463,11 @@
             },
           },
         ]);
-        logger.cLog(1, "initUser: userFleetAccts", userFleetAccts);
+        logger.log(
+          Logger.LOG_LEVEL_ENUM.INFO,
+          "initUser: userFleetAccts",
+          userFleetAccts
+        );
 
         for (let fleet of userFleetAccts) {
           let fleetLabel = new TextDecoder("utf-8")
@@ -2652,6 +2655,8 @@
         document.querySelectorAll(elemTrigger).length > 0 &&
         !document.getElementById("assistContainer")
       ) {
+        document.getElementById("assistContainerIso") &&
+          document.getElementById("assistContainerIso").remove();
         window.window.userInterfaceManager = new UserInterfaceManager(observer);
       }
     }
@@ -2722,11 +2727,7 @@
         signers: [userPublicKey, userPublicKey],
       };
 
-      await blockchainManager.txSignAndSend(
-        tx,
-        fleet,
-        "Create CargoPod"
-      );
+      await blockchainManager.txSignAndSend(tx, fleet, "Create CargoPod");
 
       return cargoPod;
     }
@@ -2895,7 +2896,7 @@
       let amountLoaded = 0;
       if (currentAmmoCnt < resAmmoMax) {
         amountLoaded = resAmmoMax - currentAmmoCnt;
-        logger.cLog(
+        logger.log(
           1,
           `${utils.timeUtils.FleetTimeStamp(
             fleet.label
@@ -2920,11 +2921,9 @@
       const errorFuelRatio = 0.75;
 
       async function unloadSDU() {
-        logger.cLog(
+        logger.log(
           1,
-          `${utils.timeUtils.FleetTimeStamp(
-            userFleets[i].label
-          )} Unloading SDU`
+          `${utils.timeUtils.FleetTimeStamp(userFleets[i].label)} Unloading SDU`
         );
 
         //Get SDU count
@@ -2950,7 +2949,7 @@
             userFleets[i].starbaseCoord,
             sduToUnload
           );
-          logger.cLog(
+          logger.log(
             2,
             `${utils.timeUtils.FleetTimeStamp(
               userFleets[i].label
@@ -2961,11 +2960,9 @@
       }
 
       async function loadFood() {
-        logger.cLog(
+        logger.log(
           1,
-          `${utils.timeUtils.FleetTimeStamp(
-            userFleets[i].label
-          )} Loading Food`
+          `${utils.timeUtils.FleetTimeStamp(userFleets[i].label)} Loading Food`
         );
 
         //Update this just in case it's missing
@@ -3009,7 +3006,7 @@
 
         //Were enough food loaded?
         if (userFleets[i].foodCnt < userFleets[i].scanCost) {
-          logger.cLog(
+          logger.log(
             1,
             `${utils.timeUtils.FleetTimeStamp(
               userFleets[i].label
@@ -3029,11 +3026,9 @@
       }
 
       async function loadFuel() {
-        logger.cLog(
+        logger.log(
           1,
-          `${utils.timeUtils.FleetTimeStamp(
-            userFleets[i].label
-          )} Refueling`
+          `${utils.timeUtils.FleetTimeStamp(userFleets[i].label)} Refueling`
         );
         let fleetCurrentFuel =
           await blockchainManager.solanaReadConnection.getParsedTokenAccountsByOwner(
@@ -3081,7 +3076,7 @@
           userFleets[i].fuelCnt <
           userFleets[i].fuelCapacity * errorFuelRatio
         ) {
-          logger.cLog(
+          logger.log(
             1,
             `${utils.timeUtils.FleetTimeStamp(
               userFleets[i].label
@@ -3109,7 +3104,7 @@
 
       if (utils.coordinateUtils.CoordsEqual(fleetCoords, baseCoords)) {
         //At starbase
-        logger.cLog(
+        logger.log(
           1,
           `${utils.timeUtils.FleetTimeStamp(
             userFleets[i].label
@@ -3142,7 +3137,7 @@
           baseCoords
         );
         if (moveDist > 0 && !userFleets[i].state.includes("Warp C/D")) {
-          logger.cLog(
+          logger.log(
             1,
             `${utils.timeUtils.FleetTimeStamp(
               userFleets[i].label
@@ -3155,14 +3150,14 @@
             baseCoords[0],
             baseCoords[1]
           );
-          logger.cLog(
+          logger.log(
             1,
             `${utils.timeUtils.FleetTimeStamp(
               userFleets[i].label
             )} Resupply: Arrived at base`
           );
         } else {
-          logger.cLog(
+          logger.log(
             1,
             `${utils.timeUtils.FleetTimeStamp(
               userFleets[i].label
@@ -3176,8 +3171,91 @@
   }
 
   class Logger {
-    cLog(level, ...args) {
-      if (level <= globalSettings.debugLogLevel) console.log(...args);
+    static LOG_LEVEL_ENUM = {
+      CRITICAL: 0,
+      ERROR: 1,
+      WARN: 2,
+      INFO: 3,
+      DEBUG: 4,
+      VERBOSE: 5,
+      EXTRA: 6,
+    };
+
+    debugLogLevel = Logger.LOG_LEVEL_ENUM.WARN;
+
+    constructor() {
+      this.debugLogLevel = globalSettings.debugLogLevel;
+    }
+
+    debug(...args) {
+      debugger;
+      args.forEach((arg) => {
+        console.log("%c" + arg, "color: yellow; background-color: black;");
+      });
+      debugger;
+    }
+
+    log(level, ...args) {
+      const logFunction = (values, formatString) => {
+        if (typeof values === "undefined") {
+          console.trace();
+          console.log("Attempted to log an undefined value");
+          debugger;
+        }
+        values.forEach((value) => {
+          if (
+            typeof value !== "boolean" ||
+            typeof value !== "number" ||
+            typeof value !== "string"
+          ) {
+            console.dir(value);
+          } else {
+            console.log("%c" + value, formatString);
+          }
+        });
+      };
+
+      if (level <= this.debugLogLevel) {
+        switch (level) {
+          case Logger.LOG_LEVEL_ENUM.CRITICAL:
+            args.forEach((arg) => {
+              console.log(
+                "%c" + arg,
+                "color: red; background-color: black; font-weight: bold; font-size: 22px;"
+              );
+            });
+            console.trace();
+            debugger;
+            break;
+          case Logger.LOG_LEVEL_ENUM.ERROR:
+            args.forEach((arg) => {
+              console.log(
+                "%c" + arg,
+                "color: red; background-color: black; font-weight: bold;"
+              );
+            });
+            debugger;
+            break;
+          case Logger.LOG_LEVEL_ENUM.WARN:
+            args.forEach((arg) => {
+              console.log(
+                "%c" + arg,
+                "color: yellow; background-color: black;"
+              );
+            });
+            debugger;
+            break;
+          case Logger.LOG_LEVEL_ENUM.INFO:
+            logFunction(args, "color: white; background-color: black;");
+            break;
+          case Logger.LOG_LEVEL_ENUM.VERBOSE:
+            logFunction(args, "font-weight: bold; font-size: 16px;");
+            break;
+          default:
+            console.log(...args);
+            break;
+        }
+      }
     }
   }
 
@@ -3261,7 +3339,7 @@
             window.userInterfaceManager.updateAssistStatus(userFleet);
           }
 
-          let miningDuration = Mining.prototype.calculateMiningDuration(
+          let miningDuration = this.calculateMiningDuration(
             userFleet.cargoCapacity,
             userFleet.miningRate,
             resourceHardness,
@@ -3278,11 +3356,10 @@
           );
           ammoForDuration = Math.min(userFleet.ammoCapacity, ammoForDuration);
 
-          let distToTarget =
-            Movement.prototype.calculateMovementDistance(
-              [starbaseX, starbaseY],
-              [destX, destY]
-            );
+          let distToTarget = Movement.prototype.calculateMovementDistance(
+            [starbaseX, starbaseY],
+            [destX, destY]
+          );
           let distReturn = Movement.prototype.calculateMovementDistance(
             [destX, destY],
             [starbaseX, starbaseY]
@@ -3302,20 +3379,11 @@
               [starbaseX, starbaseY],
               [destX, destY]
             ) +
-            Fleet.prototype.calculateSubwarpFuelBurn(
-              userFleet,
-              distReturn
-            ) +
+            Fleet.prototype.calculateSubwarpFuelBurn(userFleet, distReturn) +
             userFleet.planetExitFuelAmount;
           let subwarpCost =
-            Fleet.prototype.calculateSubwarpFuelBurn(
-              userFleet,
-              distToTarget
-            ) +
-            Fleet.prototype.calculateSubwarpFuelBurn(
-              userFleet,
-              distReturn
-            ) +
+            Fleet.prototype.calculateSubwarpFuelBurn(userFleet, distToTarget) +
+            Fleet.prototype.calculateSubwarpFuelBurn(userFleet, distReturn) +
             userFleet.planetExitFuelAmount;
 
           let resShort = cargoItems.find(
@@ -3492,11 +3560,9 @@
             .instruction(),
         };
 
-        logger.cLog(
+        logger.log(
           1,
-          `${utils.timeUtils.FleetTimeStamp(
-            fleet.label
-          )} Mining Start ...`
+          `${utils.timeUtils.FleetTimeStamp(fleet.label)} Mining Start ...`
         );
         Fleet.prototype.updateFleetState(fleet, "Mine Starting");
 
@@ -3556,9 +3622,7 @@
             ],
             blockchainManager.programPK
           );
-        const fleetAmmoToken = await Fleet.prototype.getFleetAmmoToken(
-          fleet
-        );
+        const fleetAmmoToken = await Fleet.prototype.getFleetAmmoToken(fleet);
         const fleetCurrentCargo =
           await blockchainManager.solanaReadConnection.getParsedTokenAccountsByOwner(
             fleet.cargoHold,
@@ -3596,8 +3660,8 @@
           "fleet resource token",
           fleetResourceToken
         );
-        logger.cLog(
-          2,
+        logger.log(
+          Logger.LOG_LEVEL_ENUM.DEBUG,
           `${utils.timeUtils.FleetTimeStamp(
             fleet.label
           )} Mining getAccountInfo result`,
@@ -3611,7 +3675,7 @@
             fleet
           );
 
-          logger.cLog(
+          logger.log(
             2,
             `${utils.timeUtils.FleetTimeStamp(
               fleet.label
@@ -3783,14 +3847,12 @@
               progressionConfig: progressionConfigAcct,
               cargoProgram: blockchainManager.cargoProgramPK,
               pointsProgram: blockchainManager.pointsProgramId,
-              tokenProgram:
-                blockchainManager.blockchainManager
-                  .tokenProgramPK,
+              tokenProgram: blockchainManager.blockchainManager.tokenProgramPK,
             })
             .instruction(),
         };
 
-        logger.cLog(
+        logger.log(
           1,
           `${utils.timeUtils.FleetTimeStamp(fleet.label)} Mining Stop`
         );
@@ -3803,10 +3865,7 @@
         );
 
         //await utils.timeUtils.wait(2000);
-        logger.cLog(
-          1,
-          `${utils.timeUtils.FleetTimeStamp(fleet.label)} Idle 💤`
-        );
+        logger.log(1, `${utils.timeUtils.FleetTimeStamp(fleet.label)} Idle 💤`);
         Fleet.prototype.updateFleetState(fleet, "Idle");
 
         resolve(txResult);
@@ -3827,10 +3886,7 @@
         },
       ]);
       let resourceHardness = mineItem.account.resourceHardness;
-      let planets = await Starbase.prototype.getPlanetsFromCoords(
-        destX,
-        destY
-      );
+      let planets = await Starbase.prototype.getPlanetsFromCoords(destX, destY);
       let sageResource = null;
       let planet = null;
       for (let planetCheck of planets) {
@@ -3860,7 +3916,7 @@
         let resShort = cargoItems.find(
           (r) => r.token == userFleets[i].mineResource
         ).name;
-        logger.cLog(
+        logger.log(
           1,
           `${utils.timeUtils.FleetTimeStamp(
             userFleets[i].label
@@ -3976,7 +4032,7 @@
         ? currentAmmo.account.data.parsed.info.tokenAmount.uiAmount
         : 0;
 
-      let miningDuration = Mining.prototype.calculateMiningDuration(
+      let miningDuration = this.calculateMiningDuration(
         userFleets[i].cargoCapacity - cargoCnt,
         userFleets[i].miningRate,
         resourceHardness,
@@ -3999,7 +4055,7 @@
         [starbaseX, starbaseY]
       );
 
-      logger.cLog(
+      logger.log(
         4,
         `${utils.timeUtils.FleetTimeStamp(
           userFleets[i].label
@@ -4027,20 +4083,11 @@
         userFleets[i].planetExitFuelAmount;
       let halfWarpCost =
         warpCostToTarget +
-        Fleet.prototype.calculateSubwarpFuelBurn(
-          userFleets[i],
-          distReturn
-        ) +
+        Fleet.prototype.calculateSubwarpFuelBurn(userFleets[i], distReturn) +
         userFleets[i].planetExitFuelAmount;
       let subwarpCost =
-        Fleet.prototype.calculateSubwarpFuelBurn(
-          userFleets[i],
-          distToTarget
-        ) +
-        Fleet.prototype.calculateSubwarpFuelBurn(
-          userFleets[i],
-          distReturn
-        ) +
+        Fleet.prototype.calculateSubwarpFuelBurn(userFleets[i], distToTarget) +
+        Fleet.prototype.calculateSubwarpFuelBurn(userFleets[i], distReturn) +
         userFleets[i].planetExitFuelAmount;
       let fuelNeeded = userFleets[i].planetExitFuelAmount;
       if (userFleets[i].moveType == "warp") {
@@ -4059,7 +4106,7 @@
 
         //Hard-coded 60 second duration check: no point resuming mining if it'll take less than 1 minute to finish
         if (miningDuration < 60) {
-          logger.cLog(
+          logger.log(
             1,
             `${utils.timeUtils.FleetTimeStamp(
               userFleets[i].label
@@ -4076,7 +4123,7 @@
 
         //Needs Resupply?
         if (needSupplies) {
-          logger.cLog(
+          logger.log(
             1,
             `${utils.timeUtils.FleetTimeStamp(
               userFleets[i].label
@@ -4101,26 +4148,26 @@
             ammoForDuration
           );
 
-          logger.cLog(
+          logger.log(
             2,
             `${utils.timeUtils.FleetTimeStamp(
               userFleets[i].label
             )} Calculated miningDuration: ${miningDuration}`
           );
-          logger.cLog(
+          logger.log(
             2,
             `${utils.timeUtils.FleetTimeStamp(
               userFleets[i].label
             )} fuel: ${currentFuelCnt}/${fuelNeeded}`
           );
-          logger.cLog(
+          logger.log(
             2,
             `${utils.timeUtils.FleetTimeStamp(
               userFleets[i].label
             )} ammo: ${currentAmmoCnt}/${ammoForDuration}`
           );
-          //logger.cLog(2, `${utils.timeUtils.FleetTimeStamp(userFleets[i].label)} ammoForDuration: ${ammoForDuration} = miningDuration ${miningDuration} * (ammoConsumptionRate ${userFleets[i].ammoConsumptionRate} / 10000)`);
-          logger.cLog(
+          //logger.log(Logger.LOG_LEVEL_ENUM.INFO, `${utils.timeUtils.FleetTimeStamp(userFleets[i].label)} ammoForDuration: ${ammoForDuration} = miningDuration ${miningDuration} * (ammoConsumptionRate ${userFleets[i].ammoConsumptionRate} / 10000)`);
+          logger.log(
             2,
             `${utils.timeUtils.FleetTimeStamp(
               userFleets[i].label
@@ -4132,8 +4179,8 @@
               userFleets[i],
               userFleets[i].starbaseCoord
             );
-            logger.cLog(
-              1,
+            logger.log(
+              Logger.LOG_LEVEL_ENUM.ERROR,
               `${utils.timeUtils.FleetTimeStamp(
                 userFleets[i].label
               )} Unloading resource`
@@ -4152,7 +4199,7 @@
 
             //if (currentFuelCnt < userFleets[i].fuelCapacity) {
             if (currentFuelCnt < fuelNeeded) {
-              logger.cLog(
+              logger.log(
                 1,
                 `${utils.timeUtils.FleetTimeStamp(
                   userFleets[i].label
@@ -4175,7 +4222,7 @@
                   userFleets[i].fuelCapacity - currentFuelCnt
                 );
               if (fuelResp && fuelResp.name == "NotEnoughResource") {
-                logger.cLog(
+                logger.log(
                   1,
                   `${utils.timeUtils.FleetTimeStamp(
                     userFleets[i].label
@@ -4185,7 +4232,7 @@
               }
               //await utils.timeUtils.wait(2000);
             } else {
-              logger.cLog(
+              logger.log(
                 1,
                 `${utils.timeUtils.FleetTimeStamp(
                   userFleets[i].label
@@ -4194,7 +4241,7 @@
             }
 
             if (currentAmmoCnt < ammoForDuration) {
-              logger.cLog(
+              logger.log(
                 1,
                 `${utils.timeUtils.FleetTimeStamp(
                   userFleets[i].label
@@ -4217,7 +4264,7 @@
                   userFleets[i].ammoCapacity - currentAmmoCnt
                 );
               if (ammoResp && ammoResp.name == "NotEnoughResource") {
-                logger.cLog(
+                logger.log(
                   1,
                   `${utils.timeUtils.FleetTimeStamp(
                     userFleets[i].label
@@ -4227,7 +4274,7 @@
               }
               //await utils.timeUtils.wait(2000);
             } else {
-              logger.cLog(
+              logger.log(
                 1,
                 `${utils.timeUtils.FleetTimeStamp(
                   userFleets[i].label
@@ -4245,7 +4292,7 @@
                 n + account.data.parsed.info.tokenAmount.uiAmount,
               0
             );
-            miningDuration = Fleet.prototype.calculateMiningDuration(
+            miningDuration = this.calculateMiningDuration(
               userFleets[i].cargoCapacity - cargoCnt,
               userFleets[i].miningRate,
               resourceHardness,
@@ -4255,7 +4302,7 @@
               miningDuration * (userFleets[i].foodConsumptionRate / 10000)
             );
             if (currentFoodCnt < foodForDuration) {
-              logger.cLog(
+              logger.log(
                 1,
                 `${utils.timeUtils.FleetTimeStamp(
                   userFleets[i].label
@@ -4278,7 +4325,7 @@
                   foodForDuration - currentFoodCnt
                 );
               if (foodResp && foodResp.name == "NotEnoughResource") {
-                logger.cLog(
+                logger.log(
                   1,
                   `${utils.timeUtils.FleetTimeStamp(
                     userFleets[i].label
@@ -4288,7 +4335,7 @@
               }
               //await utils.timeUtils.wait(2000);
             } else {
-              logger.cLog(
+              logger.log(
                 1,
                 `${utils.timeUtils.FleetTimeStamp(
                   userFleets[i].label
@@ -4343,7 +4390,7 @@
           );
           const [fleetState, extra] =
             Fleet.prototype.getFleetState(fleetAcctInfo);
-          logger.cLog(
+          logger.log(
             4,
             `${utils.timeUtils.FleetTimeStamp(
               userFleets[i].label
@@ -4361,11 +4408,12 @@
 
       //Already mining?
       if (userFleets[i].state.slice(0, 4) === "Mine" && fleetMining) {
-        logger.cLog(
+        logger.log(
           1,
           `${utils.timeUtils.FleetTimeStamp(
             userFleets[i].label
-          )} Debug fleetMining: ${fleetMining}`
+          )} Debug fleetMining `,
+          fleetMining
         );
         console.log("fleetMining: ", fleetMining);
         let mineEnd = (fleetMining.start.toNumber() + miningDuration) * 1000;
@@ -4406,25 +4454,22 @@
           [targetX, targetY]
         );
         if (moveDist > 0) {
-          let warpCooldownFinished =
-            await Movement.prototype.handleMovement(
-              i,
-              moveDist,
-              targetX,
-              targetY
-            );
+          let warpCooldownFinished = await Movement.prototype.handleMovement(
+            i,
+            moveDist,
+            targetX,
+            targetY
+          );
         } else {
-          logger.cLog(
+          logger.log(
             1,
-            `${utils.timeUtils.FleetTimeStamp(
-              userFleets[i].label
-            )} Idle 💤`
+            `${utils.timeUtils.FleetTimeStamp(userFleets[i].label)} Idle 💤`
           );
           Fleet.prototype.updateFleetState(userFleets[i], "Idle");
         }
       } else {
         const msg = "ERROR: Fleet must start at Target or Starbase";
-        logger.cLog(
+        logger.log(
           1,
           `${utils.timeUtils.FleetTimeStamp(
             userFleets[i].label
@@ -4450,8 +4495,7 @@
         "full fleet info",
         userFleets[i].publicKey
       );
-      let [fleetState, extra] =
-        Fleet.prototype.getFleetState(fleetAcctInfo);
+      let [fleetState, extra] = Fleet.prototype.getFleetState(fleetAcctInfo);
 
       //Fleet idle and needs to be moved?
       if (
@@ -4464,12 +4508,11 @@
         moveY !== ""
       ) {
         if (extra[0] !== moveX || extra[1] !== moveY) {
-          let warpCost = Fleet.prototype.calcWarpFuelReq(
-            userFleets[i],
-            extra,
-            [moveX, moveY]
-          );
-          logger.cLog(
+          let warpCost = Fleet.prototype.calcWarpFuelReq(userFleets[i], extra, [
+            moveX,
+            moveY,
+          ]);
+          logger.log(
             4,
             `${utils.timeUtils.FleetTimeStamp(
               userFleets[i].label
@@ -4525,7 +4568,7 @@
                 const warpCDExpireTimeStr = `[${utils.timeUtils.TimeToStr(
                   new Date(warpCooldownExpiresAt)
                 )}]`;
-                logger.cLog(
+                logger.log(
                   1,
                   `${utils.timeUtils.FleetTimeStamp(
                     userFleets[i].label
@@ -4555,7 +4598,7 @@
               const fleetPK = userFleets[i].publicKey.toString();
               const fleetSavedData = await GM.getValue(fleetPK, "{}");
               const fleetParsedData = JSON.parse(fleetSavedData);
-              //logger.cLog(3, `${utils.timeUtils.FleetTimeStamp(userFleets[i].label)} moveTargets`, fleetParsedData.moveTarget, userFleets[i].moveTarget);
+              //logger.log(Logger.LOG_LEVEL_ENUM.INFO, `${utils.timeUtils.FleetTimeStamp(userFleets[i].label)} moveTargets`, fleetParsedData.moveTarget, userFleets[i].moveTarget);
               fleetParsedData.moveTarget = userFleets[i].moveTarget;
               await GM.setValue(fleetPK, JSON.stringify(fleetParsedData));
 
@@ -4583,8 +4626,8 @@
               moveTime
             );
           } else {
-            logger.cLog(
-              1,
+            logger.log(
+              Logger.LOG_LEVEL_ENUM.ERROR,
               `${utils.timeUtils.FleetTimeStamp(
                 userFleets[i].label
               )} Unable to move, lack of fuel`
@@ -4608,7 +4651,7 @@
       let endTime = warpFinish > subwarpFinish ? warpFinish : subwarpFinish;
 
       const calcEndTime = Date.now() + moveTime * 1000;
-      logger.cLog(
+      logger.log(
         3,
         `${utils.timeUtils.FleetTimeStamp(
           userFleets[i].label
@@ -4616,7 +4659,7 @@
           new Date(endTime)
         )}`
       );
-      logger.cLog(
+      logger.log(
         3,
         `${utils.timeUtils.FleetTimeStamp(
           userFleets[i].label
@@ -4679,11 +4722,60 @@
   }
 
   class ProxyManager {
+    readProxy;
+    writeProxy;
+
+    customReadRPCs = []; //Used for reading solana data
+    customWriteRPCs = []; //Used for pushing transactions to solana chain
+    saRPCs = [
+      "https://twilight-autumn-diagram.solana-mainnet.quiknode.pro/4fc53d638efd1cc0f80764bc457944bb325d1ff1", //Quicknode
+      // "https://rpc.hellomoon.io/57dbc69d-7e66-4454-b33e-fa6a4b46170f", //Hello Moon
+      "https://staratl-mainc06-2415.mainnet.rpcpool.com", //Triton
+      "https://mainnet.helius-rpc.com/?api-key=735486d8-ae86-4d26-829c-e34a2210d119", //Helius
+    ];
+
     rpcIdx = 0;
+
+    constructor(readProxy, writeProxy) {
+      this.readProxy = {
+        get(target, key, receiver) {
+          const origMethod = target[key];
+          if (typeof origMethod === "function") {
+            return async function (...args) {
+              solanaReadCount++;
+              return await this.doProxyStuff(
+                target,
+                origMethod,
+                args,
+                blockchainManager.readRPCs,
+                "READ"
+              );
+            };
+          }
+        },
+      };
+      this.writeProxy = {
+        get(target, key, receiver) {
+          const origMethod = target[key];
+          if (typeof origMethod === "function") {
+            return async function (...args) {
+              solanaWriteCount++;
+              return await this.doProxyStuff(
+                target,
+                origMethod,
+                args,
+                blockchainManager.writeRPCs,
+                "WRITE"
+              );
+            };
+          }
+        },
+      };
+    }
 
     async doProxyStuff(target, origMethod, args, rpcs, proxyType) {
       if (this.rpcIdx > rpcs.length) {
-        console.debug("RPC index out of bounds, resetting to 0");
+        logger.debug("RPC index out of bounds, resetting to 0");
         this.rpcIdx = 0;
       }
 
@@ -4701,15 +4793,22 @@
       try {
         result = await origMethod.apply(target, args);
       } catch (error1) {
-        logger.cLog(2, `${proxyType} CONNECTION ERROR: `, error1);
-        logger.cLog(
-          2,
+        logger.log(
+          Logger.LOG_LEVEL_ENUM.ERROR,
+          `${proxyType} CONNECTION ERROR: `,
+          error1
+        );
+        logger.log(
+          Logger.LOG_LEVEL_ENUM.INFO,
           `${proxyType} current RPC: ${target._rpcWsEndpoint}`
         );
         if (isConnectivityError(error1)) {
           let success = false;
           while (!success && this.rpcIdx < rpcs.length) {
-            logger.cLog(2, `${proxyType} trying ${rpcs[this.rpcIdx]}`);
+            logger.log(
+              Logger.LOG_LEVEL_ENUM.DEBUG,
+              `${proxyType} trying ${rpcs[this.rpcIdx]}`
+            );
             const newConnection = new solanaWeb3.Connection(
               rpcs[this.rpcIdx],
               "confirmed"
@@ -4718,21 +4817,31 @@
               result = await origMethod.apply(newConnection, args);
               success = true;
             } catch (error2) {
-              logger.cLog(2, `${proxyType} INNER ERROR: `, error2);
+              logger.log(
+                Logger.LOG_LEVEL_ENUM.ERROR,
+                `${proxyType} INNER ERROR: `,
+                error2
+              );
               if (!isConnectivityError(error2)) {
                 return error2;
               }
             }
-            console.debug(`Old rpcIdx is ${this.rpcIdx}`);
+            logger.log(
+              Logger.LOG_LEVEL_ENUM.DEBUG,
+              `Old rpcIdx is ${this.rpcIdx}`
+            );
             this.rpcIdx = this.rpcIdx + 1 < rpcs.length ? this.rpcIdx + 1 : 0;
-            console.debug(`New rpcIdx is ${this.rpcIdx}`);
+            logger.log(
+              Logger.LOG_LEVEL_ENUM.DEBUG,
+              `New rpcIdx is ${this.rpcIdx}`
+            );
 
             //Prevent spam if errors are occurring immediately (disconnected from internet / unplugged cable)
             await utils.timeUtils.wait(500);
           }
         } else {
-          logger.cLog(
-            2,
+          logger.log(
+            Logger.LOG_LEVEL_ENUM.ERROR,
             `${proxyType} NOT isConnectivityError(): `,
             error1
           );
@@ -4830,7 +4939,7 @@
     async createScannerPDAs(fleet) {
       return; // TODO: Remove this hard coded return statement
       debugger;
-      logger.cLog(
+      logger.log(
         2,
         `${utils.timeUtils.FleetTimeStamp(
           fleet.label
@@ -4873,7 +4982,10 @@
 
     async execScan(fleet, fleetCoords) {
       return new Promise(async (resolve) => {
-        let sector = await Starbase.prototype.getSectorFromCoords(fleetCoords[0], fleetCoords[1]);
+        let sector = await Starbase.prototype.getSectorFromCoords(
+          fleetCoords[0],
+          fleetCoords[1]
+        );
         try {
           let sectorExists = await sageProgram.account.sector.fetch(sector);
         } catch (err) {
@@ -4907,9 +5019,7 @@
           };
           Fleet.prototype.updateFleetState(
             fleet,
-            `Scanning [${utils.timeUtils.TimeToStr(
-              new Date(Date.now())
-            )}]`
+            `Scanning [${utils.timeUtils.TimeToStr(new Date(Date.now()))}]`
           );
           let txResult = await blockchainManager.txSignAndSend(
             txDiscover,
@@ -5038,47 +5148,44 @@
           const starbaseCoords = utils.coordinateUtils.ConvertCoords(
             userFleets[i].starbaseCoord
           );
-          //logger.cLog(4, `${utils.timeUtils.FleetTimeStamp(userFleets[i].label)} starbaseCoords: ${starbaseCoords}`);
+          //logger.log(Logger.LOG_LEVEL_ENUM.DEBUG, `${utils.timeUtils.FleetTimeStamp(userFleets[i].label)} starbaseCoords: ${starbaseCoords}`);
 
           let fuelNeeded = 0;
           if (userFleets[i].moveType == "warp") {
-            const warpCostFromFleetToDest =
-              Fleet.prototype.calcWarpFuelReq(
-                userFleets[i],
-                fleetCoords,
-                destCoords
-              );
-            const warpCostFromDestToStarbase =
-              Fleet.prototype.calcWarpFuelReq(
-                userFleets[i],
-                destCoords,
-                starbaseCoords
-              );
+            const warpCostFromFleetToDest = Fleet.prototype.calcWarpFuelReq(
+              userFleets[i],
+              fleetCoords,
+              destCoords
+            );
+            const warpCostFromDestToStarbase = Fleet.prototype.calcWarpFuelReq(
+              userFleets[i],
+              destCoords,
+              starbaseCoords
+            );
             fuelNeeded = warpCostFromFleetToDest + warpCostFromDestToStarbase;
-            logger.cLog(
-              4,
+            logger.log(
+              Logger.LOG_LEVEL_ENUM.DEBUG,
               `${utils.timeUtils.FleetTimeStamp(
                 userFleets[i].label
               )} Warp cost to target: ${warpCostFromFleetToDest}`
             );
-            logger.cLog(
-              4,
+            logger.log(
+              Logger.LOG_LEVEL_ENUM.DEBUG,
               `${utils.timeUtils.FleetTimeStamp(
                 userFleets[i].label
               )} Warp cost to return: ${warpCostFromDestToStarbase}`
             );
-            logger.cLog(
-              4,
+            logger.log(
+              Logger.LOG_LEVEL_ENUM.DEBUG,
               `${utils.timeUtils.FleetTimeStamp(
                 userFleets[i].label
               )} Warp cost total: ${fuelNeeded}`
             );
           } else {
-            const distToTarget =
-              Movement.prototype.calculateMovementDistance(
-                fleetCoords,
-                destCoords
-              );
+            const distToTarget = Movement.prototype.calculateMovementDistance(
+              fleetCoords,
+              destCoords
+            );
             const distFromTargetToStarbase =
               Movement.prototype.calculateMovementDistance(
                 destCoords,
@@ -5088,8 +5195,8 @@
               userFleets[i],
               distToTarget + distFromTargetToStarbase
             );
-            logger.cLog(
-              4,
+            logger.log(
+              Logger.LOG_LEVEL_ENUM.DEBUG,
               `${utils.timeUtils.FleetTimeStamp(
                 userFleets[i].label
               )} Subwarp cost total: ${fuelNeeded}`
@@ -5113,8 +5220,8 @@
             fuelNeeded
           )} / have ${Math.round(currentFuelCnt)}`;
           if (currentFuelCnt > fuelNeeded) {
-            logger.cLog(
-              1,
+            logger.log(
+              Logger.LOG_LEVEL_ENUM.ERROR,
               `${utils.timeUtils.FleetTimeStamp(userFleets[i].label)}`,
               fuelReadout
             );
@@ -5139,7 +5246,7 @@
                 destCoords[0],
                 destCoords[1]
               );
-              logger.cLog(
+              logger.log(
                 1,
                 `${utils.timeUtils.FleetTimeStamp(
                   userFleets[i].label
@@ -5147,7 +5254,7 @@
               );
               userFleets[i].scanStrikes = 0;
             } else {
-              logger.cLog(
+              logger.log(
                 1,
                 `${utils.timeUtils.FleetTimeStamp(
                   userFleets[i].label
@@ -5155,8 +5262,8 @@
               );
             }
           } else {
-            logger.cLog(
-              1,
+            logger.log(
+              Logger.LOG_LEVEL_ENUM.ERROR,
               `${utils.timeUtils.FleetTimeStamp(
                 userFleets[i].label
               )} ${fuelReadout} (low)`
@@ -5165,11 +5272,9 @@
               await handleResupply(i, fleetCoords);
               moved = true;
             } else {
-              logger.cLog(
+              logger.log(
                 3,
-                `${utils.timeUtils.FleetTimeStamp(
-                  userFleets[i].label
-                )} Moved:`,
+                `${utils.timeUtils.FleetTimeStamp(userFleets[i].label)} Moved:`,
                 moved
               );
             }
@@ -5182,13 +5287,19 @@
         if (!userFleets[i].scanStrikes) userFleets[i].scanStrikes = 0;
         const scanResult = await this.execScan(userFleets[i], fleetCoords);
         const changesSDU = scanResult
-          ? blockchainManager.getBalanceChange(scanResult, userFleets[i].sduToken.toString())
+          ? blockchainManager.getBalanceChange(
+              scanResult,
+              userFleets[i].sduToken.toString()
+            )
           : {
               postBalance: userFleets[i].sduCnt,
               preBalance: userFleets[i].sduCnt,
             };
         const changesFood = scanResult
-          ? blockchainManager.getBalanceChange(scanResult, userFleets[i].foodToken.toString())
+          ? blockchainManager.getBalanceChange(
+              scanResult,
+              userFleets[i].foodToken.toString()
+            )
           : {
               postBalance: userFleets[i].foodCnt - userFleets[i].scanCost,
               preBalance: userFleets[i].foodCnt,
@@ -5211,7 +5322,7 @@
           userFleets[i].scanSkipCnt = 0;
         }
 
-        logger.cLog(
+        logger.log(
           1,
           `${utils.timeUtils.FleetTimeStamp(
             userFleets[i].label
@@ -5221,7 +5332,7 @@
         );
         if (!sduFound && scanCondition < userFleets[i].scanMin) {
           userFleets[i].scanStrikes++;
-          logger.cLog(
+          logger.log(
             3,
             `${utils.timeUtils.FleetTimeStamp(
               userFleets[i].label
@@ -5231,7 +5342,7 @@
           );
         } else {
           userFleets[i].scanStrikes = 0;
-          logger.cLog(
+          logger.log(
             3,
             `${utils.timeUtils.FleetTimeStamp(
               userFleets[i].label
@@ -5242,7 +5353,7 @@
         const struckOut =
           userFleets[i].scanStrikes >= globalSettings.scanStrikeCount;
         if (struckOut) {
-          logger.cLog(
+          logger.log(
             3,
             `${utils.timeUtils.FleetTimeStamp(
               userFleets[i].label
@@ -5266,12 +5377,10 @@
         if (needPause) {
           userFleets[i].scanEnd =
             Date.now() + globalSettings.scanPauseTime * 1000;
-          userFleets[
-            i
-          ].state = `Scanning Paused [${utils.timeUtils.TimeToStr(
+          userFleets[i].state = `Scanning Paused [${utils.timeUtils.TimeToStr(
             new Date(userFleets[i].scanEnd)
           )}]`;
-          logger.cLog(
+          logger.log(
             1,
             `${utils.timeUtils.FleetTimeStamp(
               userFleets[i].label
@@ -5307,7 +5416,7 @@
         userFleets[i].startupScanBlockCheck = true;
 
         if (userFleets[i].scanMove) {
-          logger.cLog(
+          logger.log(
             2,
             `${utils.timeUtils.FleetTimeStamp(
               userFleets[i].label
@@ -5322,7 +5431,7 @@
             ) {
               if (userFleets[i].scanBlockIdx != s) {
                 userFleets[i].scanBlockIdx = s;
-                logger.cLog(
+                logger.log(
                   2,
                   `${utils.timeUtils.FleetTimeStamp(
                     userFleets[i].label
@@ -5338,141 +5447,99 @@
   }
 
   class Settings {
-    autoStartScript = false;
-    confirmationCheckingDelay = 200;
-    debugLogLevel = 3;
-    lowPriorityFeeMultiplier = 10;
-    priorityFee = 1;
-    reloadPageOnFailedFleets = 0;
-    saveProfile = true;
-    settingsGmKey = "globalSettings";
+    GREASE_MONKEY_SETTINGS_KEY = "globalSettings";
+    autoStartScript = false; //Should assistant automatically start after initialization is complete?
+    confirmationCheckingDelay = 200; //How many milliseconds to wait before re-reading the chain for confirmation
+    debugLogLevel = 3; //How much console logging you want to see (higher number = more, 0 = none)
+    lowPriorityFeeMultiplier = 10; //Percentage of the priority fees above should be used for all actions except scanning
+    priorityFee = 1; // Priority Fee added to each transaction in Lamports. Set to 0 (zero) to disable priority fees. 1 Lamport = 0.000000001 SOL
+    reloadPageOnFailedFleets = 0; //How many fleets need to stall before triggering an automatic page reload? (0 = never trigger)
+    saveProfile = true; //Save profile selection to speed up future initialization
     statusPanelOpacity = 75;
-    scanBlockPattern = "square";
-    scanBlockLength = 5;
-    scanBlockResetAfterResupply = false;
-    scanResupplyOnLowFuel = false;
-    scanSectorRegenTime = 90;
-    scanPauseTime = 600;
-    scanStrikeCount = 3;
-    statusPanelOpacity = 75;
-    transportUseAmmoBank = true;
-    transportStopOnError = true;
+    scanBlockPattern = "square"; //Valid patterns: square, ring, spiral, up, down, left, right, sly
+    scanBlockLength = 5; //Length of the line-based patterns (only applies to up, down, left and right)
+    scanBlockResetAfterResupply = false; //Start from the beginning of the pattern after resupplying at starbase?
+    scanResupplyOnLowFuel = false; //When true, scanning fleet set to scanMove with low fuel will return to base to resupply fuel + toolkits
+    scanSectorRegenTime = 90; //Number of seconds to wait after a successful scan to allow sector to regenerate
+    scanPauseTime = 600; //Number of seconds to wait when sectors probabilities are too low
+    scanStrikeCount = 3; //Number of seconds to scan a low probability sector before giving up and moving on (or pausing)
+    statusPanelOpacity = 75; //How transparent the status panel should be (1 = completely opaque)
+    transportUseAmmoBank = true; //Determines if your transports should use their ammo banks to move ammo (in addition to their cargo holds)
+    transportStopOnError = true; //Should transport fleet stop completely if there's an error (example: not enough resource/fuel/etc.)
 
     constructor() {
-      const rawSettingsData = GM.getValue(this.settingsGmKey, "{}").then(
-        (settingsString) => {
-          const settingsData = JSON.parse(settingsString);
-          Object.entries(settingsData).forEach(([key, value]) => {
-            this[key] = value;
-          });
-        }
-      );
+      const rawSettingsData = GM.getValue(
+        this.GREASE_MONKEY_SETTINGS_KEY,
+        "{}"
+      ).then((settingsString) => {
+        const settingsData = JSON.parse(settingsString);
+        Object.entries(settingsData).forEach(([key, value]) => {
+          this[key] = value;
+        });
+      });
     }
 
     async loadGlobalSettings() {
       const rawSettingsData = await GM.getValue(this.settingsGmKey, "{}");
-      let globalSettings = JSON.parse(rawSettingsData);
+      let loadedSettings = JSON.parse(rawSettingsData);
       globalSettings = {
-        // Priority Fee added to each transaction in Lamports. Set to 0 (zero) to disable priority fees. 1 Lamport = 0.000000001 SOL
-        priorityFee: utils.typeUtils.parseIntDefault(
-          this.priorityFee,
-          1
-        ),
-
-        //Percentage of the priority fees above should be used for all actions except scanning
+        priorityFee: utils.typeUtils.parseIntDefault(this.priorityFee, 1),
         lowPriorityFeeMultiplier: utils.typeUtils.parseIntDefault(
           this.lowPriorityFeeMultiplier,
           10
         ),
-
-        //Save profile selection to speed up future initialization
-        saveProfile: utils.typeUtils.parseBoolDefault(
-          this.saveProfile,
-          true
-        ),
+        saveProfile: utils.typeUtils.parseBoolDefault(this.saveProfile, true),
         savedProfile:
           this.savedProfile && this.savedProfile.length > 0
             ? this.savedProfile
             : [],
-
-        //How many milliseconds to wait before re-reading the chain for confirmation
         confirmationCheckingDelay: utils.typeUtils.parseIntDefault(
           this.confirmationCheckingDelay,
           200
         ),
-
-        //How much console logging you want to see (higher number = more, 0 = none)
-        debugLogLevel: utils.typeUtils.parseIntDefault(
-          this.debugLogLevel,
-          3
-        ),
-
-        //Determines if your transports should use their ammo banks to move ammo (in addition to their cargo holds)
+        debugLogLevel: utils.typeUtils.parseIntDefault(this.debugLogLevel, 3),
         transportUseAmmoBank: utils.typeUtils.parseBoolDefault(
           this.transportUseAmmoBank,
           true
         ),
-
-        //Should transport fleet stop completely if there's an error (example: not enough resource/fuel/etc.)
         transportStopOnError: utils.typeUtils.parseBoolDefault(
           this.transportStopOnError,
           true
         ),
-
-        //Valid patterns: square, ring, spiral, up, down, left, right, sly
-        scanBlockPattern: Scanning.scanningPatterns.includes(this.scanBlockPattern)
+        scanBlockPattern: Scanning.scanningPatterns.includes(
+          this.scanBlockPattern
+        )
           ? this.scanBlockPattern
           : "square",
-
-        //Length of the line-based patterns (only applies to up, down, left and right)
         scanBlockLength: utils.typeUtils.parseIntDefault(
           this.scanBlockLength,
           5
         ),
-
-        //Start from the beginning of the pattern after resupplying at starbase?
         scanBlockResetAfterResupply: utils.typeUtils.parseBoolDefault(
           this.scanBlockResetAfterResupply,
           false
         ),
-
-        //When true, scanning fleet set to scanMove with low fuel will return to base to resupply fuel + toolkits
         scanResupplyOnLowFuel: utils.typeUtils.parseBoolDefault(
           this.scanResupplyOnLowFuel,
           false
         ),
-
-        //Number of seconds to wait after a successful scan to allow sector to regenerate
         scanSectorRegenTime: utils.typeUtils.parseIntDefault(
           this.scanSectorRegenTime,
           90
         ),
-
-        //Number of seconds to wait when sectors probabilities are too low
-        scanPauseTime: utils.typeUtils.parseIntDefault(
-          this.scanPauseTime,
-          600
-        ),
-
-        //Number of seconds to scan a low probability sector before giving up and moving on (or pausing)
+        scanPauseTime: utils.typeUtils.parseIntDefault(this.scanPauseTime, 600),
         scanStrikeCount: utils.typeUtils.parseIntDefault(
           this.scanStrikeCount,
           3
         ),
-
-        //How transparent the status panel should be (1 = completely opaque)
         statusPanelOpacity: utils.typeUtils.parseIntDefault(
           this.statusPanelOpacity,
           75
         ),
-
-        //Should assistant automatically start after initialization is complete?
         autoStartScript: utils.typeUtils.parseBoolDefault(
           this.autoStartScript,
           false
         ),
-
-        //How many fleets need to stall before triggering an automatic page reload? (0 = never trigger)
         reloadPageOnFailedFleets: utils.typeUtils.parseIntDefault(
           this.reloadPageOnFailedFleets,
           0
@@ -5482,7 +5549,11 @@
         this[key] = value;
       });
 
-      logger.cLog(2, "SYSTEM: Global Settings loaded", globalSettings);
+      logger.log(
+        Logger.LOG_LEVEL_ENUM.INFO,
+        "SYSTEM: Global Settings loaded",
+        globalSettings
+      );
     }
 
     async saveSettingsInput() {
@@ -5557,7 +5628,11 @@
 
       if (errBool === false) {
         errElem[0].innerHTML = "";
-        logger.cLog(2, "SYSTEM: Global Settings saved", globalSettings);
+        logger.log(
+          Logger.LOG_LEVEL_ENUM.INFO,
+          "SYSTEM: Global Settings saved",
+          globalSettings
+        );
         window.userInterfaceManager.settingsModalToggle();
       }
     }
@@ -5992,21 +6067,21 @@
           );
 
           if (hasStarbaseManifest) {
-            await handleTransportUnloading(
+            await Fleet.prototype.handleTransportUnloading(
               userFleets[i],
               userFleets[i].starbaseCoord,
               starbaseCargoManifest
             );
           } else
-            logger.cLog(
-              1,
+            logger.log(
+              Logger.LOG_LEVEL_ENUM.ERROR,
               `${utils.timeUtils.FleetTimeStamp(
                 userFleets[i].label
               )} Unloading skipped - No resources specified`
             );
 
           //Refeuling at Starbase
-          let refuelResp = await handleTransportRefueling(
+          let refuelResp = await Fleet.prototype.handleTransportRefueling(
             userFleets[i],
             userFleets[i].starbaseCoord,
             [starbaseX, starbaseY],
@@ -6038,13 +6113,13 @@
             );
             if (!loadedCargo && globalSettings.transportStopOnError) {
               //const newFleetState = `ERROR: No more cargo to load`;
-              //logger.cLog(1,`${utils.timeUtils.FleetTimeStamp(userFleets[i].label)} ${newFleetState}`);
+              //logger.log(Logger.LOG_LEVEL_ENUM.INFO,`${utils.timeUtils.FleetTimeStamp(userFleets[i].label)} ${newFleetState}`);
               //userFleets[i].state = newFleetState;
               return;
             }
           } else
-            logger.cLog(
-              1,
+            logger.log(
+              Logger.LOG_LEVEL_ENUM.ERROR,
               `${utils.timeUtils.FleetTimeStamp(
                 userFleets[i].label
               )} Loading skipped - No resources specified`
@@ -6066,22 +6141,22 @@
           //Unloading at Target
           let fuelUnloadDeficit = 0; //How far short of the manifest was the amount of fuel unloaded?
           if (hasTargetManifest) {
-            const unloadResult = await handleTransportUnloading(
+            const unloadResult = await Fleet.prototype.handleTransportUnloading(
               userFleets[i],
               userFleets[i].destCoord,
               targetCargoManifest
             );
             fuelUnloadDeficit = unloadResult.fuelUnloadDeficit;
           } else
-            logger.cLog(
-              1,
+            logger.log(
+              Logger.LOG_LEVEL_ENUM.ERROR,
               `${utils.timeUtils.FleetTimeStamp(
                 userFleets[i].label
               )} Unloading skipped - No resources specified`
             );
 
           //Refueling at Target
-          let refuelResp = await handleTransportRefueling(
+          let refuelResp = await Fleet.prototype.handleTransportRefueling(
             userFleets[i],
             userFleets[i].destCoord,
             [destX, destY],
@@ -6112,13 +6187,13 @@
             );
             if (!loadedCargo && globalSettings.transportStopOnError) {
               //const newFleetState = `ERROR: No more cargo to load`;
-              //logger.cLog(1,`${utils.timeUtils.FleetTimeStamp(userFleets[i].label)} ${newFleetState}`);
+              //logger.log(Logger.LOG_LEVEL_ENUM.INFO,`${utils.timeUtils.FleetTimeStamp(userFleets[i].label)} ${newFleetState}`);
               //userFleets[i].state = newFleetState;
               return;
             }
           } else
-            logger.cLog(
-              1,
+            logger.log(
+              Logger.LOG_LEVEL_ENUM.ERROR,
               `${utils.timeUtils.FleetTimeStamp(
                 userFleets[i].label
               )} Loading skipped - No resources specified`
@@ -6149,7 +6224,7 @@
             targetY
           );
         } else {
-          logger.cLog(
+          logger.log(
             1,
             `${utils.timeUtils.FleetTimeStamp(
               userFleets[i].label
@@ -6203,66 +6278,133 @@
     }
   }
 
+  class UserInterface {
+    elementArray = [];
+    styleObject = {};
+
+    constructor(...args) {
+      // const observer = new MutationObserver();
+
+      args.forEach((arg) => {
+        debugger;
+      });
+    }
+
+    addElement(elementToAdd) {
+      this.elementArray.push(elementToAdd);
+    }
+  }
+
   class UserInterfaceManager {
+    mainWindow = new UserInterface();
+    elementArray = [];
+    statusPanelOpacity = globalSettings.statusPanelOpacity / 100;
+    styleConstants = {
+      BASE_STYLES: `.assist-modal {display: none; position: fixed; z-index: 2; padding-top: 100px; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.4);} .assist-modal-content {position: relative; display: flex; flex-direction: column; background-color: rgb(41, 41, 48); margin: auto; padding: 0; border: 1px solid #888; width: 785px; min-width: 450px; max-width: 75%; height: auto; min-height: 50px; max-height: 85%; overflow-y: auto; box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2),0 6px 20px 0 rgba(0,0,0,0.19); -webkit-animation-name: animatetop; -webkit-animation-duration: 0.4s; animation-name: animatetop; animation-duration: 0.4s;} #assist-modal-error {color: red; margin-left: 5px; margin-right: 5px; font-size: 16px;} .assist-modal-header-right {color: rgb(255, 190, 77); margin-left: auto !important; font-size: 20px;} .assist-btn {background-color: rgb(41, 41, 48); color: rgb(255, 190, 77); margin-left: 2px; margin-right: 2px;} .assist-btn:hover {background-color: rgba(255, 190, 77, 0.2);} .assist-modal-close:hover, .assist-modal-close:focus {font-weight: bold; text-decoration: none; cursor: pointer;} .assist-modal-btn {color: rgb(255, 190, 77); padding: 5px 5px; margin-right: 5px; text-decoration: none; background-color: rgb(41, 41, 48); border: none; cursor: pointer;} .assist-modal-save:hover { background-color: rgba(255, 190, 77, 0.2); } .assist-modal-header {display: flex; align-items: center; padding: 2px 16px; background-color: rgba(255, 190, 77, 0.2); border-bottom: 2px solid rgb(255, 190, 77); color: rgb(255, 190, 77);} .assist-modal-body {padding: 2px 16px; font-size: 12px;} .assist-modal-body > table {width: 100%;} .assist-modal-body th, .assist-modal-body td {padding-right: 5px, padding-left: 5px;} #assistStatus {background-color: rgba(0,0,0,${this.statusPanelOpacity}); opacity: ${this.statusPanelOpacity}; backdrop-filter: blur(10px); position: absolute; top: 80px; right: 20px; z-index: 1;} #assistStarbaseStatus {background-color: rgba(0,0,0,${this.statusPanelOpacity}); opacity: ${this.statusPanelOpacity}; backdrop-filter: blur(10px); position: absolute; top: 80px; right: 20px; z-index: 1;} #assistCheck {background-color: rgba(0,0,0,0.75); backdrop-filter: blur(10px); position: absolute; margin: auto; left: 0; right: 0; top: 100px; width: 650px; min-width: 450px; max-width: 75%; z-index: 1;} .dropdown { position: absolute; display: none; margin-top: 25px; margin-left: 152px; background-color: rgb(41, 41, 48); min-width: 120px; box-shadow: 0 8px 16px 0 rgba(0, 0, 0, 0.2); z-index: 2; } .dropdown.show { display: block; } .assist-btn-alt { color: rgb(255, 190, 77); padding: 12px 16px; text-decoration: none; display: block; background-color: rgb(41, 41, 48); border: none; cursor: pointer; } .assist-btn-alt:hover { background-color: rgba(255, 190, 77, 0.2); } #checkresults { padding: 5px; margin-top: 20px; border: 1px solid grey; border-radius: 8px;} .dropdown button {width: 100%; text-align: left;} #assistModal table {border-collapse: collapse;} .assist-scan-row, .assist-mine-row, .assist-transport-row {background-color: rgba(255, 190, 77, 0.1); border-left: 1px solid white; border-right: 1px solid white; border-bottom: 1px solid white} .show-top-border {background-color: rgba(255, 190, 77, 0.1); border-left: 1px solid white; border-right: 1px solid white; border-top: 1px solid white;}`,
+      ICON_STRING:
+        "data:image/png;base64,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",
+    };
+
     constructor(observer) {
+      // let observer = new MutationObserver(this.waitForLabs); <- Arguments = mutation, observer
+      // observer.observe(document, { childList: true, subtree: true });
+      // this.waitForLabs(null, null); // waitForLabs(mutation, observer) <- Arguments
+
       document.getElementById("assistContainerIso") &&
         document.getElementById("assistContainerIso").remove();
       observer && observer.disconnect();
-      let assistCSS = document.createElement("style");
-      const statusPanelOpacity = globalSettings.statusPanelOpacity / 100;
-      assistCSS.innerHTML = `.assist-modal {display: none; position: fixed; z-index: 2; padding-top: 100px; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.4);} .assist-modal-content {position: relative; display: flex; flex-direction: column; background-color: rgb(41, 41, 48); margin: auto; padding: 0; border: 1px solid #888; width: 785px; min-width: 450px; max-width: 75%; height: auto; min-height: 50px; max-height: 85%; overflow-y: auto; box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2),0 6px 20px 0 rgba(0,0,0,0.19); -webkit-animation-name: animatetop; -webkit-animation-duration: 0.4s; animation-name: animatetop; animation-duration: 0.4s;} #assist-modal-error {color: red; margin-left: 5px; margin-right: 5px; font-size: 16px;} .assist-modal-header-right {color: rgb(255, 190, 77); margin-left: auto !important; font-size: 20px;} .assist-btn {background-color: rgb(41, 41, 48); color: rgb(255, 190, 77); margin-left: 2px; margin-right: 2px;} .assist-btn:hover {background-color: rgba(255, 190, 77, 0.2);} .assist-modal-close:hover, .assist-modal-close:focus {font-weight: bold; text-decoration: none; cursor: pointer;} .assist-modal-btn {color: rgb(255, 190, 77); padding: 5px 5px; margin-right: 5px; text-decoration: none; background-color: rgb(41, 41, 48); border: none; cursor: pointer;} .assist-modal-save:hover { background-color: rgba(255, 190, 77, 0.2); } .assist-modal-header {display: flex; align-items: center; padding: 2px 16px; background-color: rgba(255, 190, 77, 0.2); border-bottom: 2px solid rgb(255, 190, 77); color: rgb(255, 190, 77);} .assist-modal-body {padding: 2px 16px; font-size: 12px;} .assist-modal-body > table {width: 100%;} .assist-modal-body th, .assist-modal-body td {padding-right: 5px, padding-left: 5px;} #assistStatus {background-color: rgba(0,0,0,${statusPanelOpacity}); opacity: ${statusPanelOpacity}; backdrop-filter: blur(10px); position: absolute; top: 80px; right: 20px; z-index: 1;} #assistStarbaseStatus {background-color: rgba(0,0,0,${statusPanelOpacity}); opacity: ${statusPanelOpacity}; backdrop-filter: blur(10px); position: absolute; top: 80px; right: 20px; z-index: 1;} #assistCheck {background-color: rgba(0,0,0,0.75); backdrop-filter: blur(10px); position: absolute; margin: auto; left: 0; right: 0; top: 100px; width: 650px; min-width: 450px; max-width: 75%; z-index: 1;} .dropdown { position: absolute; display: none; margin-top: 25px; margin-left: 152px; background-color: rgb(41, 41, 48); min-width: 120px; box-shadow: 0 8px 16px 0 rgba(0, 0, 0, 0.2); z-index: 2; } .dropdown.show { display: block; } .assist-btn-alt { color: rgb(255, 190, 77); padding: 12px 16px; text-decoration: none; display: block; background-color: rgb(41, 41, 48); border: none; cursor: pointer; } .assist-btn-alt:hover { background-color: rgba(255, 190, 77, 0.2); } #checkresults { padding: 5px; margin-top: 20px; border: 1px solid grey; border-radius: 8px;} .dropdown button {width: 100%; text-align: left;} #assistModal table {border-collapse: collapse;} .assist-scan-row, .assist-mine-row, .assist-transport-row {background-color: rgba(255, 190, 77, 0.1); border-left: 1px solid white; border-right: 1px solid white; border-bottom: 1px solid white} .show-top-border {background-color: rgba(255, 190, 77, 0.1); border-left: 1px solid white; border-right: 1px solid white; border-top: 1px solid white;}`;
 
-      let assistModal = document.createElement("div");
-      assistModal.classList.add("assist-modal");
-      assistModal.id = "assistModal";
-      assistModal.style.display = "none";
-      let assistModalContent = document.createElement("div");
-      assistModalContent.classList.add("assist-modal-content");
-      let iconStr =
-        "data:image/png;base64,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";
-      assistModalContent.innerHTML =
-        '<div class="assist-modal-header"><img src="' +
-        iconStr +
-        '" /><span style="padding-left: 15px;">SLY Lab Assistant v' +
-        GM_info.script.version +
-        '</span><div class="assist-modal-header-right"><button id="undockAllBtn" class="assist-modal-btn">Undock All</button><button id="configImportExport" class="assist-modal-btn">Import/Export</button><button class=" assist-modal-btn assist-modal-save">Save</button><span class="assist-modal-close">x</span></div></div><div class="assist-modal-body"><span id="assist-modal-error"></span><table><tr><td>Fleet</td><td>Assignment</td><td>Target</td><td>Starbase</td><td>Subwarp</td><td>Max Cargo</td><td>Max Ammo</td><td>Max Fuel</td></tr></table></div>';
-      assistModal.append(assistModalContent);
+      const assistCSS = document.createElement("style");
+      assistCSS.innerHTML = this.styleConstants.BASE_STYLES;
 
-      let settingsModal = document.createElement("div");
-      settingsModal.classList.add("assist-modal");
-      settingsModal.id = "settingsModal";
-      settingsModal.style.display = "none";
-      let settingsModalContent = document.createElement("div");
-      settingsModalContent.classList.add("assist-modal-content");
-      settingsModalContent.innerHTML =
-        '<div class="assist-modal-header"> <img src="' +
-        iconStr +
-        '" /> <span style="padding-left: 15px;">SLY Lab Assistant v' +
-        GM_info.script.version +
-        '</span> <div class="assist-modal-header-right"> <button class=" assist-modal-btn assist-modal-save">Save</button> <span class="assist-modal-close">x</span> </div></div><div class="assist-modal-body"> <span id="settings-modal-error"></span> <div id="settings-modal-header">Global Settings</div> <div>Priority Fee <input id="priorityFee" type="number" min="0" max="100000000" placeholder="1" ></input> <span>Added to each transaction. Set to 0 (zero) to disable. 1 Lamport = 0.000000001 SOL</span> </div> <div>Low Priority Fee % <input id="lowPriorityFeeMultiplier" type="range" min="0" max="100" value="10" step="10"></input> <span>Percentage above priority fees that should be used for smaller transactions</span> </div> <div>Save profile selection? <input id="saveProfile" type="checkbox"></input> <span>Should the profile selection be saved (uncheck to select a different profile each time)?</span> </div> <div>Tx Poll Delay <input id="confirmationCheckingDelay" type="number" min="200" max="10000" placeholder="200"></input> <span>How many milliseconds to wait before re-reading the chain for confirmation</span> </div> <div>Console Logging <input id="debugLogLevel" type="number" min="0" max="9" placeholder="3"></input> <span>How much console logging you want to see (higher number = more, 0 = none)</span> </div> <div>Use Ammo Banks for Transport? <input id="transportUseAmmoBank" type="checkbox"></input> <span>Should transports also use their ammo banks to help move ammo?</span> </div> <div>Stop Transports On Error <input id="transportStopOnError" type="checkbox"></input> <span>Should transport fleet stop completely if there is an error (example: not enough resource/fuel/etc.)?</span> </div> <div>Moving Scan Pattern <select id="scanBlockPattern"> <option value="square">square</option> <option value="ring">ring</option> <option value="spiral">spiral</option> <option value="up">up</option> <option value="down">down</option> <option value="left">left</option> <option value="right">right</option> <option value="sly">sly</option> </select> <span>Only applies to fleets set to Move While Scanning</span> </div> <div>Scan Block Length <input id="scanBlockLength" type="number" min="2" max="50" placeholder="5"></input> <span>How far fleets should go for the up, down, left and right scanning patterns</span> </div> <div>Scan Block Resets After Resupply? <input id="scanBlockResetAfterResupply" type="checkbox"></input> <span>Start from the beginning of the pattern after resupplying at starbase?</span> </div> <div>Scan Resupply On Low Fuel? <input id="scanResupplyOnLowFuel" type="checkbox"></input> <span>Do scanning fleets set to Move While Scanning return to base to resupply when fuel is too low to move?</span> </div> <div>Scan Sector Regeneration Delay <input id="scanSectorRegenTime" type="number" min="0" placeholder="90"></input> <span>Number of seconds to wait after finding SDU</span> </div> <div>Scan Pause Time <input id="scanPauseTime" type="number" min="240" max="6000" placeholder="600"></input> <span>Number of seconds to wait when sectors probabilities are too low</span> </div> <div>Scan Strike Count <input id="scanStrikeCount" type="number" min="1" max="10" placeholder="3"></input> <span>Number of low % scans before moving on or pausing</span> </div> <div>Status Panel Opacity <input id="statusPanelOpacity" type="range" min="1" max="100" value="75"></input> <span>(requires page refresh)</span> </div> <div>---</div> <div>Advanced Settings</div> <div>Auto Start Script <input id="autoStartScript" type="checkbox"></input> <span>Should Lab Assistant automatically start after initialization is complete?</span> </div> <div>Reload On Stuck Fleets <input id="reloadPageOnFailedFleets" type="number" min="0" max="999" placeholder="0"></input> <span>Automatically refresh the page if this many fleets get stuck (0 = never)</span> </div></div>';
-      settingsModal.append(settingsModalContent);
+      class AssistantModal {
+        element = null;
 
-      let importModal = document.createElement("div");
-      importModal.classList.add("assist-modal");
-      importModal.id = "importModal";
-      importModal.style.display = "none";
-      importModal.style.zIndex = 3;
-      let importModalContent = document.createElement("div");
-      importModalContent.classList.add("assist-modal-content");
-      importModalContent.innerHTML =
-        '<div class="assist-modal-header"><span>Config Import/Export</span><div class="assist-modal-header-right"><button id="importTargetsBtn" class="assist-modal-btn assist-modal-save">Import Fleet Targets</button><button id="importConfigBtn" class="assist-modal-btn assist-modal-save">Import Config</button><span class="assist-modal-close">x</span></div></div><div class="assist-modal-body"><span id="assist-modal-error"></span><div></div><div><ul><li>Copy the text below to save your raw Lab Assistant configuration.</li><li>To restore your previous configuration, enter configuration text in the text box below then click the Import Config button.</li><li>To import new Target coordinates for fleets, paste the exported text from EveEye in the text box below then click the Import Fleet Targets button.</li></ul></div><div></div><textarea id="importText" rows="4" cols="80" max-width="100%"></textarea></div>';
-      importModal.append(importModalContent);
+        constructor(iconStr) {
+          let assistModal = document.createElement("div");
+          assistModal.classList.add("assist-modal");
+          assistModal.id = "assistModal";
+          assistModal.style.display = "none";
+          let assistModalContent = document.createElement("div");
+          assistModalContent.classList.add("assist-modal-content");
+          assistModalContent.innerHTML =
+            '<div class="assist-modal-header"><img src="' +
+            iconStr +
+            '" /><span style="padding-left: 15px;">SLY Lab Assistant v' +
+            GM_info.script.version +
+            '</span><div class="assist-modal-header-right"><button id="undockAllBtn" class="assist-modal-btn">Undock All</button><button id="configImportExport" class="assist-modal-btn">Import/Export</button><button class=" assist-modal-btn assist-modal-save">Save</button><span class="assist-modal-close">x</span></div></div><div class="assist-modal-body"><span id="assist-modal-error"></span><table><tr><td>Fleet</td><td>Assignment</td><td>Target</td><td>Starbase</td><td>Subwarp</td><td>Max Cargo</td><td>Max Ammo</td><td>Max Fuel</td></tr></table></div>';
+          assistModal.append(assistModalContent);
+          this.element = assistModal;
+        }
+      }
 
-      let profileModal = document.createElement("div");
-      profileModal.classList.add("assist-modal");
-      profileModal.id = "profileModal";
-      profileModal.style.display = "none";
-      profileModal.style.zIndex = 3;
-      let profileModalContent = document.createElement("div");
-      profileModalContent.classList.add("assist-modal-content");
-      profileModalContent.innerHTML =
-        '<div class="assist-modal-header"><span>Profile Selection</span><div class="assist-modal-header-right"><span class="assist-modal-close">x</span></div></div><div class="assist-modal-body"><span id="assist-modal-error"></span><div></div><span>Select a profile to connect to Lab Assistant.</span><div></div><div id="profileDiv" max-width="100%"></div></div>';
-      profileModal.append(profileModalContent);
+      class ImportModal {
+        element = null;
+
+        constructor(iconStr) {
+          let importModal = document.createElement("div");
+          importModal.classList.add("assist-modal");
+          importModal.id = "importModal";
+          importModal.style.display = "none";
+          importModal.style.zIndex = 3;
+          let importModalContent = document.createElement("div");
+          importModalContent.classList.add("assist-modal-content");
+          importModalContent.innerHTML =
+            '<div class="assist-modal-header"><span>Config Import/Export</span><div class="assist-modal-header-right"><button id="importTargetsBtn" class="assist-modal-btn assist-modal-save">Import Fleet Targets</button><button id="importConfigBtn" class="assist-modal-btn assist-modal-save">Import Config</button><span class="assist-modal-close">x</span></div></div><div class="assist-modal-body"><span id="assist-modal-error"></span><div></div><div><ul><li>Copy the text below to save your raw Lab Assistant configuration.</li><li>To restore your previous configuration, enter configuration text in the text box below then click the Import Config button.</li><li>To import new Target coordinates for fleets, paste the exported text from EveEye in the text box below then click the Import Fleet Targets button.</li></ul></div><div></div><textarea id="importText" rows="4" cols="80" max-width="100%"></textarea></div>';
+          importModal.append(importModalContent);
+          this.element = importModal;
+        }
+      }
+
+      class ProfileModal {
+        element = null;
+
+        constructor(iconStr) {
+          let profileModal = document.createElement("div");
+          profileModal.classList.add("assist-modal");
+          profileModal.id = "profileModal";
+          profileModal.style.display = "none";
+          profileModal.style.zIndex = 3;
+          let profileModalContent = document.createElement("div");
+          profileModalContent.classList.add("assist-modal-content");
+          profileModalContent.innerHTML =
+            '<div class="assist-modal-header"><span>Profile Selection</span><div class="assist-modal-header-right"><span class="assist-modal-close">x</span></div></div><div class="assist-modal-body"><span id="assist-modal-error"></span><div></div><span>Select a profile to connect to Lab Assistant.</span><div></div><div id="profileDiv" max-width="100%"></div></div>';
+          profileModal.append(profileModalContent);
+          this.element = profileModal;
+        }
+      }
+
+      class SettingsModal {
+        element = null;
+
+        constructor(iconStr) {
+          let settingsModal = document.createElement("div");
+          settingsModal.classList.add("assist-modal");
+          settingsModal.id = "settingsModal";
+          settingsModal.style.display = "none";
+          let settingsModalContent = document.createElement("div");
+          settingsModalContent.classList.add("assist-modal-content");
+          settingsModalContent.innerHTML =
+            '<div class="assist-modal-header"> <img src="' +
+            iconStr +
+            '" /> <span style="padding-left: 15px;">SLY Lab Assistant v' +
+            GM_info.script.version +
+            '</span> <div class="assist-modal-header-right"> <button class=" assist-modal-btn assist-modal-save">Save</button> <span class="assist-modal-close">x</span> </div></div><div class="assist-modal-body"> <span id="settings-modal-error"></span> <div id="settings-modal-header">Global Settings</div> <div>Priority Fee <input id="priorityFee" type="number" min="0" max="100000000" placeholder="1" ></input> <span>Added to each transaction. Set to 0 (zero) to disable. 1 Lamport = 0.000000001 SOL</span> </div> <div>Low Priority Fee % <input id="lowPriorityFeeMultiplier" type="range" min="0" max="100" value="10" step="10"></input> <span>Percentage above priority fees that should be used for smaller transactions</span> </div> <div>Save profile selection? <input id="saveProfile" type="checkbox"></input> <span>Should the profile selection be saved (uncheck to select a different profile each time)?</span> </div> <div>Tx Poll Delay <input id="confirmationCheckingDelay" type="number" min="200" max="10000" placeholder="200"></input> <span>How many milliseconds to wait before re-reading the chain for confirmation</span> </div> <div>Console Logging <input id="debugLogLevel" type="number" min="0" max="9" placeholder="3"></input> <span>How much console logging you want to see (higher number = more, 0 = none)</span> </div> <div>Use Ammo Banks for Transport? <input id="transportUseAmmoBank" type="checkbox"></input> <span>Should transports also use their ammo banks to help move ammo?</span> </div> <div>Stop Transports On Error <input id="transportStopOnError" type="checkbox"></input> <span>Should transport fleet stop completely if there is an error (example: not enough resource/fuel/etc.)?</span> </div> <div>Moving Scan Pattern <select id="scanBlockPattern"> <option value="square">square</option> <option value="ring">ring</option> <option value="spiral">spiral</option> <option value="up">up</option> <option value="down">down</option> <option value="left">left</option> <option value="right">right</option> <option value="sly">sly</option> </select> <span>Only applies to fleets set to Move While Scanning</span> </div> <div>Scan Block Length <input id="scanBlockLength" type="number" min="2" max="50" placeholder="5"></input> <span>How far fleets should go for the up, down, left and right scanning patterns</span> </div> <div>Scan Block Resets After Resupply? <input id="scanBlockResetAfterResupply" type="checkbox"></input> <span>Start from the beginning of the pattern after resupplying at starbase?</span> </div> <div>Scan Resupply On Low Fuel? <input id="scanResupplyOnLowFuel" type="checkbox"></input> <span>Do scanning fleets set to Move While Scanning return to base to resupply when fuel is too low to move?</span> </div> <div>Scan Sector Regeneration Delay <input id="scanSectorRegenTime" type="number" min="0" placeholder="90"></input> <span>Number of seconds to wait after finding SDU</span> </div> <div>Scan Pause Time <input id="scanPauseTime" type="number" min="240" max="6000" placeholder="600"></input> <span>Number of seconds to wait when sectors probabilities are too low</span> </div> <div>Scan Strike Count <input id="scanStrikeCount" type="number" min="1" max="10" placeholder="3"></input> <span>Number of low % scans before moving on or pausing</span> </div> <div>Status Panel Opacity <input id="statusPanelOpacity" type="range" min="1" max="100" value="75"></input> <span>(requires page refresh)</span> </div> <div>---</div> <div>Advanced Settings</div> <div>Auto Start Script <input id="autoStartScript" type="checkbox"></input> <span>Should Lab Assistant automatically start after initialization is complete?</span> </div> <div>Reload On Stuck Fleets <input id="reloadPageOnFailedFleets" type="number" min="0" max="999" placeholder="0"></input> <span>Automatically refresh the page if this many fleets get stuck (0 = never)</span> </div></div>';
+          settingsModal.append(settingsModalContent);
+          this.element = settingsModal;
+        }
+      }
+
+      const assistantModal = new AssistantModal(
+        this.styleConstants.ICON_STRING
+      );
+      this.mainWindow.addElement(assistantModal);
+
+      const importModal = new ImportModal();
+      const profileModal = new ProfileModal();
+
+      const settingsModal = new SettingsModal();
+      this.mainWindow.addElement(settingsModal);
 
       let assistStatus = document.createElement("div");
       assistStatus.id = "assistStatus";
@@ -6431,13 +6573,13 @@
         targetElem.prepend(assistCSS);
       }
       // these were originally attached to targetElem
-      autoContainer.append(assistModal);
-      autoContainer.append(settingsModal);
+      autoContainer.append(assistantModal.element);
+      autoContainer.append(settingsModal.element);
       autoContainer.append(assistStatus);
       autoContainer.append(assistStarbaseStatus);
       autoContainer.append(assistCheck);
-      autoContainer.append(importModal);
-      autoContainer.append(profileModal);
+      autoContainer.append(importModal.element);
+      autoContainer.append(profileModal.element);
       //autoContainer.append(addAcctModal);
       let assistModalClose = document.querySelector(
         "#assistModal .assist-modal-close"
@@ -7043,8 +7185,7 @@
     }
 
     async addSettingsInput() {
-      document.querySelector("#priorityFee").value =
-        globalSettings.priorityFee;
+      document.querySelector("#priorityFee").value = globalSettings.priorityFee;
       document.querySelector("#lowPriorityFeeMultiplier").value =
         globalSettings.lowPriorityFeeMultiplier;
       document.querySelector("#saveProfile").checked =
@@ -7095,7 +7236,7 @@
         let importText = document.querySelector("#importText");
         importText.value = "{";
         let fleetKeys = GM_listValues();
-        //logger.cLog(2, 'assistImportToggle: fleetKeys', fleetKeys);
+        //logger.log(Logger.LOG_LEVEL_ENUM.INFO, 'assistImportToggle: fleetKeys', fleetKeys);
         for (let i in fleetKeys) {
           let fleetSavedData = await GM.getValue(fleetKeys[i], "{}");
           //let fleetParsedData = JSON.parse(fleetSavedData);
@@ -7110,7 +7251,7 @@
     }
 
     assistModalToggle() {
-      logger.cLog(
+      logger.log(
         4,
         `${utils.timeUtils.FleetTimeStamp(
           "SYSTEM"
@@ -7163,8 +7304,8 @@
           profileSelect.innerHTML = transportOptStr;
           contentElem.append(profileSelect);
           profileSelect.onchange = function () {
-            logger.cLog(
-              2,
+            logger.log(
+              Logger.LOG_LEVEL_ENUM.INFO,
               "assistProfileToggle: profileSelect.value",
               profileSelect.value
             );
@@ -7251,7 +7392,7 @@
 
       for (let [i, row] of fleetRows.entries()) {
         const inputError = (msg, innerHtml) => {
-          logger.cLog(1, msg);
+          logger.log(Logger.LOG_LEVEL_ENUM.INFO, msg);
           row.children[2].firstChild.style.border = "2px solid red";
           row.children[3].firstChild.style.border = "2px solid red";
           row.children[7].firstChild.style.border = "2px solid red";
@@ -7267,18 +7408,16 @@
         let fleetDestCoord = utils.coordinateUtils.validateCoordInput(
           row.children[2].firstChild.value
         ); //fleetDestCoord = fleetDestCoord ? fleetDestCoord.replace('.', ',') : fleetDestCoord;
-        let fleetStarbaseCoord =
-          utils.coordinateUtils.validateCoordInput(
-            row.children[3].firstChild.value
-          ); //fleetStarbaseCoord = fleetStarbaseCoord ? fleetStarbaseCoord.replace('.', ',') : fleetStarbaseCoord;
+        let fleetStarbaseCoord = utils.coordinateUtils.validateCoordInput(
+          row.children[3].firstChild.value
+        ); //fleetStarbaseCoord = fleetStarbaseCoord ? fleetStarbaseCoord.replace('.', ',') : fleetStarbaseCoord;
         let subwarpPref = row.children[4].firstChild.checked;
         let userFleetIndex = userFleets.findIndex((item) => {
           return item.publicKey == fleetPK;
         });
         let moveType = subwarpPref == true ? "subwarp" : "warp";
 
-        const destCoords =
-          utils.coordinateUtils.ConvertCoords(fleetDestCoord);
+        const destCoords = utils.coordinateUtils.ConvertCoords(fleetDestCoord);
         const starbaseCoords =
           utils.coordinateUtils.ConvertCoords(fleetStarbaseCoord);
 
@@ -7531,46 +7670,11 @@
   // window.Starbase = Starbase;
   // window.Transport = Transport;
   // window.User = User;
-  const globalSettings = new Settings();
+  let globalSettings = new Settings();
   const logger = new Logger();
-  const proxyManager = new ProxyManager();
-  const readConnectionProxy = {
-    get(target, key, receiver) {
-      const origMethod = target[key];
-      if (typeof origMethod === "function") {
-        return async function (...args) {
-          solanaReadCount++;
-          return await proxyManager.doProxyStuff(
-            target,
-            origMethod,
-            args,
-            blockchainManager.readRPCs,
-            "READ"
-          );
-        };
-      }
-    },
-  };
-  const writeConnectionProxy = {
-    get(target, key, receiver) {
-      const origMethod = target[key];
-      if (typeof origMethod === "function") {
-        return async function (...args) {
-          solanaWriteCount++;
-          return await proxyManager.doProxyStuff(
-            target,
-            origMethod,
-            args,
-            blockchainManager.writeRPCs,
-            "WRITE"
-          );
-        };
-      }
-    },
-  };
+
   const blockchainManager = new BlockchainManager(
-    readConnectionProxy,
-    writeConnectionProxy
+    new ProxyManager()
   );
   const game = new Game();
   const assistant = new Assistant();
@@ -7640,17 +7744,13 @@
   let solanaReadCount = 0;
   let solanaWriteCount = 0;
 
-  logger.cLog(
-    1,
-    `Read RPC: ${
-      blockchainManager.readRPCs[blockchainManager.readIdx]
-    }`
+  logger.log(
+    Logger.LOG_LEVEL_ENUM.INFO,
+    `Read RPC: ${blockchainManager.readRPCs[blockchainManager.readIdx]}`
   );
-  logger.cLog(
-    1,
-    `Write RPC: ${
-      blockchainManager.writeRPCs[blockchainManager.writeIdx]
-    }`
+  logger.log(
+    Logger.LOG_LEVEL_ENUM.INFO,
+    `Write RPC: ${blockchainManager.writeRPCs[blockchainManager.writeIdx]}`
   );
 
   //Not sure what this does, but it seems to do some reads, so sticking it on the read connection
@@ -24398,6 +24498,6 @@
   await game.initUser();
   let autoSpanRef = document.querySelector("#autoScanBtn > span");
   autoSpanRef ? (autoSpanRef.innerHTML = "Start") : null;
-  logger.cLog(0, "init complete");
-  logger.cLog(0, "Fleets: ", userFleets);
+  logger.log(Logger.LOG_LEVEL_ENUM.EXTRA, "Init Complete");
+  logger.log(Logger.LOG_LEVEL_ENUM.INFO, "Fleets: ", userFleets);
 })();
