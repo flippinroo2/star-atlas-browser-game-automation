@@ -530,14 +530,13 @@
             confirmation.name == "TransactionExpiredBlockheightExceededError" &&
             !txResult
           ) {
-            logger.log(
-              Logger.LOG_LEVEL_ENUM.CRITICAL,
+            logger.fail(
               `${utils.timeUtils.FleetTimeStamp(
                 fleetName
-              )} <${opName}> CONFIRM ❌ ${confirmationTimeStr}`
+              )} <${opName}> CONFIRM FAIL ❌ - ${confirmation.name} after ${confirmationTimeStr}`, fleet
             );
             logger.log(
-              Logger.LOG_LEVEL_ENUM.WARN,
+              Logger.LOG_LEVEL_ENUM.INFO,
               `${utils.timeUtils.FleetTimeStamp(
                 fleetName
               )} <${opName}> RESEND 🔂`
@@ -579,8 +578,7 @@
 
           const fullMsTaken = Date.now() - macroOpStart;
           const secondsTaken = Math.round(fullMsTaken / 1000);
-          logger.log(
-            1,
+          logger.success(
             `${utils.timeUtils.FleetTimeStamp(
               fleetName
             )} <${opName}> Completed 🏁 ${secondsTaken}s`
@@ -1166,7 +1164,7 @@
             .instruction(),
         };
 
-        logger.log(1, `${utils.timeUtils.FleetTimeStamp(fleet.label)} Docking`);
+        logger.log(Logger.LOG_LEVEL_ENUM.INFO, `${utils.timeUtils.FleetTimeStamp(fleet.label)} Docking`);
         this.updateFleetState(fleet, "Docking");
 
         let txResult = await blockchainManager.txSignAndSend(tx, fleet, "DOCK");
@@ -1755,7 +1753,7 @@
         const fuelToUnload = Math.min(amountToDropOff, extraFuel);
         if (fuelToUnload > 0) {
           logger.log(
-            1,
+            Logger.LOG_LEVEL_ENUM.ERROR,
             `${utils.timeUtils.FleetTimeStamp(
               fleet.label
             )} Unloading extra fuel: ${fuelToUnload}`
@@ -1886,7 +1884,7 @@
         let ammoToUnload = Math.min(currentAmmoCnt, ammoUnloadDeficit);
         if (ammoToUnload > 0) {
           logger.log(
-            1,
+            Logger.LOG_LEVEL_ENUM.ERROR,
             `${utils.timeUtils.FleetTimeStamp(
               fleet.label
             )} Unloading Ammobanks: ${ammoToUnload}`
@@ -2100,7 +2098,7 @@
         //Correct rare fleet state mismatch bug
         if (moving && fleetState == "Idle") {
           logger.log(
-            1,
+            Logger.LOG_LEVEL_ENUM.ERROR,
             `${utils.timeUtils.FleetTimeStamp(
               userFleets[i].label
             )} Fleet State Mismatch - Updating from ${
@@ -3006,7 +3004,7 @@
         //Were enough food loaded?
         if (userFleets[i].foodCnt < userFleets[i].scanCost) {
           logger.log(
-            1,
+            Logger.LOG_LEVEL_ENUM.ERROR,
             `${utils.timeUtils.FleetTimeStamp(
               userFleets[i].label
             )} ERROR: Not enough food at starbase - waiting for more`
@@ -3076,7 +3074,7 @@
           userFleets[i].fuelCapacity * errorFuelRatio
         ) {
           logger.log(
-            1,
+            Logger.LOG_LEVEL_ENUM.ERROR,
             `${utils.timeUtils.FleetTimeStamp(
               userFleets[i].label
             )} ERROR: Not enough fuel at starbase - waiting for more`
@@ -3137,7 +3135,7 @@
         );
         if (moveDist > 0 && !userFleets[i].state.includes("Warp C/D")) {
           logger.log(
-            1,
+            Logger.LOG_LEVEL_ENUM.ERROR,
             `${utils.timeUtils.FleetTimeStamp(
               userFleets[i].label
             )} Resupply: Moving to base`
@@ -3150,14 +3148,14 @@
             baseCoords[1]
           );
           logger.log(
-            1,
+            Logger.LOG_LEVEL_ENUM.ERROR,
             `${utils.timeUtils.FleetTimeStamp(
               userFleets[i].label
             )} Resupply: Arrived at base`
           );
         } else {
           logger.log(
-            1,
+            Logger.LOG_LEVEL_ENUM.ERROR,
             `${utils.timeUtils.FleetTimeStamp(
               userFleets[i].label
             )} Resupply: Already at base`
@@ -3194,6 +3192,20 @@
       debugger;
     }
 
+    fail(message){
+      console.log(
+        "%c" + message,
+        "color: red; background-color: black; font-size: 18px;"
+      );
+    }
+
+    success(message){
+      console.log(
+        "%c" + message,
+        "color: green; background-color: black; font-size: 18px;"
+      );
+    }
+
     log(level, ...args) {
       const logFunction = (values, formatString) => {
         if (typeof values === "undefined") {
@@ -3220,7 +3232,7 @@
             args.forEach((arg) => {
               console.log(
                 "%c" + arg,
-                "color: red; background-color: black; font-weight: bold; font-size: 22px;"
+                "color: red; background-color: black; font-weight: bold; font-size: 20px;"
               );
             });
             console.trace();
@@ -3242,7 +3254,6 @@
                 "color: yellow; background-color: black;"
               );
             });
-            debugger;
             break;
           case Logger.LOG_LEVEL_ENUM.INFO:
             logFunction(args, "color: white; background-color: black;");
@@ -3864,7 +3875,7 @@
         );
 
         //await utils.timeUtils.wait(2000);
-        logger.log(1, `${utils.timeUtils.FleetTimeStamp(fleet.label)} Idle 💤`);
+        logger.log(Logger.LOG_LEVEL_ENUM.INFO, `${utils.timeUtils.FleetTimeStamp(fleet.label)} Idle 💤`);
         Fleet.prototype.updateFleetState(fleet, "Idle");
 
         resolve(txResult);
@@ -4106,7 +4117,7 @@
         //Hard-coded 60 second duration check: no point resuming mining if it'll take less than 1 minute to finish
         if (miningDuration < 60) {
           logger.log(
-            1,
+            Logger.LOG_LEVEL_ENUM.ERROR,
             `${utils.timeUtils.FleetTimeStamp(
               userFleets[i].label
             )} Supplies low, only ${miningDuration} seconds left`
@@ -4123,7 +4134,7 @@
         //Needs Resupply?
         if (needSupplies) {
           logger.log(
-            1,
+            Logger.LOG_LEVEL_ENUM.ERROR,
             `${utils.timeUtils.FleetTimeStamp(
               userFleets[i].label
             )} Need resupply`
@@ -4461,7 +4472,7 @@
           );
         } else {
           logger.log(
-            1,
+            Logger.LOG_LEVEL_ENUM.ERROR,
             `${utils.timeUtils.FleetTimeStamp(userFleets[i].label)} Idle 💤`
           );
           Fleet.prototype.updateFleetState(userFleets[i], "Idle");
@@ -4733,7 +4744,7 @@
       "https://mainnet.helius-rpc.com/?api-key=735486d8-ae86-4d26-829c-e34a2210d119", //Helius
     ];
 
-    rpcIdx = 0;
+    static rpcIdx = 0;
 
     constructor() {
       this.readConnectionProxy = {
@@ -4801,7 +4812,8 @@
           Logger.LOG_LEVEL_ENUM.INFO,
           `${proxyType} current RPC: ${target._rpcWsEndpoint}`
         );
-        if (isConnectivityError(error1)) {
+        const isError1ConnectivityError = isConnectivityError(error1);
+        if (isError1ConnectivityError) {
           let success = false;
           while (!success && this.rpcIdx < rpcs.length) {
             logger.log(
@@ -5380,7 +5392,7 @@
             new Date(userFleets[i].scanEnd)
           )}]`;
           logger.log(
-            1,
+            Logger.LOG_LEVEL_ENUM.ERROR,
             `${utils.timeUtils.FleetTimeStamp(
               userFleets[i].label
             )} Scanning Paused due to low probability [${utils.timeUtils.TimeToStr(
@@ -6224,7 +6236,7 @@
           );
         } else {
           logger.log(
-            1,
+            Logger.LOG_LEVEL_ENUM.ERROR,
             `${utils.timeUtils.FleetTimeStamp(
               userFleets[i].label
             )} Transporting - ERROR: Fleet must start at Target or Starbase`
@@ -6397,13 +6409,11 @@
       const assistantModal = new AssistantModal(
         this.styleConstants.ICON_STRING
       );
-      this.mainWindow.addElement(assistantModal);
 
       const importModal = new ImportModal();
       const profileModal = new ProfileModal();
 
       const settingsModal = new SettingsModal();
-      this.mainWindow.addElement(settingsModal);
 
       let assistStatus = document.createElement("div");
       assistStatus.id = "assistStatus";
@@ -6580,6 +6590,12 @@
       autoContainer.append(importModal.element);
       autoContainer.append(profileModal.element);
       //autoContainer.append(addAcctModal);
+
+      
+      this.mainWindow.addElement(assistantModal);
+      this.mainWindow.addElement(settingsModal);
+
+
       let assistModalClose = document.querySelector(
         "#assistModal .assist-modal-close"
       );
