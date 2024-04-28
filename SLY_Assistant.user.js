@@ -230,14 +230,13 @@
         this.writeRPCs[writeIdx],
         "confirmed"
       );
-      debugger;
       this.solanaReadConnection = new Proxy(
         this.rawSolanaReadConnection,
-        readConnectionProxy
+        proxyManager.readConnectionProxy
       );
       this.solanaWriteConnection = new Proxy(
         this.rawSolanaWriteConnection,
-        writeConnectionProxy
+        proxyManager.writeConnectionProxy
       );
     }
 
@@ -4722,8 +4721,8 @@
   }
 
   class ProxyManager {
-    readProxy;
-    writeProxy;
+    readConnectionProxy;
+    writeConnectionProxy;
 
     customReadRPCs = []; //Used for reading solana data
     customWriteRPCs = []; //Used for pushing transactions to solana chain
@@ -4736,14 +4735,14 @@
 
     rpcIdx = 0;
 
-    constructor(readProxy, writeProxy) {
-      this.readProxy = {
+    constructor() {
+      this.readConnectionProxy = {
         get(target, key, receiver) {
           const origMethod = target[key];
           if (typeof origMethod === "function") {
             return async function (...args) {
               solanaReadCount++;
-              return await this.doProxyStuff(
+              return await ProxyManager.doProxyStuff(
                 target,
                 origMethod,
                 args,
@@ -4754,13 +4753,13 @@
           }
         },
       };
-      this.writeProxy = {
+      this.writeConnectionProxy = {
         get(target, key, receiver) {
           const origMethod = target[key];
           if (typeof origMethod === "function") {
             return async function (...args) {
               solanaWriteCount++;
-              return await this.doProxyStuff(
+              return await ProxyManager.doProxyStuff(
                 target,
                 origMethod,
                 args,
@@ -4773,7 +4772,7 @@
       };
     }
 
-    async doProxyStuff(target, origMethod, args, rpcs, proxyType) {
+    static async doProxyStuff(target, origMethod, args, rpcs, proxyType) {
       if (this.rpcIdx > rpcs.length) {
         logger.debug("RPC index out of bounds, resetting to 0");
         this.rpcIdx = 0;
