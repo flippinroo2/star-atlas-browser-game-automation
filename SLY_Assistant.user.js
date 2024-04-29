@@ -380,7 +380,7 @@
         }
 
         await utils.timeUtils.wait(
-          Math.max(200, globalSettings.confirmationCheckingDelay)
+          Math.max(200, window.globalSettings.confirmationCheckingDelay)
         );
         let epochInfo = await this.solanaReadConnection.getEpochInfo({
           commitment: "confirmed",
@@ -406,17 +406,17 @@
         const fleetName = fleet ? fleet.label : "unknown";
         let macroOpStart = Date.now();
         if (!priorityFeeMultiplier)
-          priorityFeeMultiplier = globalSettings.lowPriorityFeeMultiplier;
+          priorityFeeMultiplier = window.globalSettings.lowPriorityFeeMultiplier;
         priorityFeeMultiplier = priorityFeeMultiplier / 100;
 
         let confirmed = false;
         while (!confirmed) {
           //let tx = new solanaWeb3.Transaction();
-          const priorityFee = globalSettings.priorityFee
+          const priorityFee = window.globalSettings.priorityFee
             ? Math.max(
                 1,
                 Math.ceil(
-                  priorityFeeMultiplier * globalSettings.priorityFee * 5
+                  priorityFeeMultiplier * window.globalSettings.priorityFee * 5
                 )
               )
             : 0; //Convert Lamports to microLamports ?
@@ -1397,9 +1397,9 @@
 
       //Auto-reload when too many fleets fail
       if (
-        globalSettings.reloadPageOnFailedFleets &&
+        window.globalSettings.reloadPageOnFailedFleets &&
         fleetStallCount &&
-        globalSettings.reloadPageOnFailedFleets <= fleetStallCount
+        window.globalSettings.reloadPageOnFailedFleets <= fleetStallCount
       ) {
         logger.log(
           1,
@@ -1866,7 +1866,7 @@
       }
 
       //Ammo bank unloading
-      const ammoEntry = globalSettings.transportUseAmmoBank
+      const ammoEntry = window.globalSettings.transportUseAmmoBank
         ? transportManifest.find((e) => e.res === ammoMint)
         : undefined;
       if (ammoEntry) {
@@ -1912,7 +1912,7 @@
       this.updateFleetState(userFleets[i], "Loading");
 
       //Use ammo banks if possible
-      const ammoEntry = globalSettings.transportUseAmmoBank
+      const ammoEntry = window.globalSettings.transportUseAmmoBank
         ? transportManifest.find(
             (e) => e.res === sageGameAcct.account.mints.ammo.toString()
           )
@@ -2305,18 +2305,18 @@
         }
 
         if (
-          globalSettings.saveProfile &&
-          globalSettings.savedProfile &&
-          globalSettings.savedProfile.length > 0
+          window.globalSettings.saveProfile &&
+          window.globalSettings.savedProfile &&
+          window.globalSettings.savedProfile.length > 0
         ) {
           logger.log(
             Logger.LOG_LEVEL_ENUM.INFO,
             "Skipping User Profile query, using saved profile"
           );
           userProfileAcct = new solanaWeb3.PublicKey(
-            globalSettings.savedProfile[0]
+            window.globalSettings.savedProfile[0]
           );
-          userProfileKeyIdx = globalSettings.savedProfile[1];
+          userProfileKeyIdx = window.globalSettings.savedProfile[1];
         } else {
           logger.log(
             Logger.LOG_LEVEL_ENUM.INFO,
@@ -2381,37 +2381,37 @@
               : foundProf[0];
           userProfileAcct = new solanaWeb3.PublicKey(userProfile.profile);
           userProfileKeyIdx = userProfile.idx;
-          if (globalSettings.saveProfile) {
+          if (window.globalSettings.saveProfile) {
             /*
-                      globalSettings = {
-                          priorityFee: globalSettings.priorityFee,
-                          lowPriorityFeeMultiplier: globalSettings.priorityFee,
-                          saveProfile: globalSettings.priorityFee,
+                      window.globalSettings = {
+                          priorityFee: window.globalSettings.priorityFee,
+                          lowPriorityFeeMultiplier: window.globalSettings.priorityFee,
+                          saveProfile: window.globalSettings.priorityFee,
                           savedProfile: saveProfile ? (userProfileAcct && userProfileKeyIdx) ? [userProfileAcct.toString(), userProfileKeyIdx] : [] : [],
-                          confirmationCheckingDelay: globalSettings.priorityFee,
-                          debugLogLevel: globalSettings.priorityFee,
-                          transportUseAmmoBank: globalSettings.priorityFee,
-                          transportStopOnError: globalSettings.priorityFee,
-                          scanBlockPattern: globalSettings.priorityFee,
-                          scanBlockLength: globalSettings.priorityFee,
-                          scanBlockResetAfterResupply: globalSettings.priorityFee,
-                          scanResupplyOnLowFuel: globalSettings.priorityFee,
-                          scanSectorRegenTime: globalSettings.priorityFee,
-                          scanPauseTime: globalSettings.priorityFee,
-                          scanStrikeCount: globalSettings.priorityFee,
-                          statusPanelOpacity: globalSettings.priorityFee,
-                          autoStartScript: globalSettings.priorityFee,
-                          reloadPageOnFailedFleets: globalSettings.priorityFee,
+                          confirmationCheckingDelay: window.globalSettings.priorityFee,
+                          debugLogLevel: window.globalSettings.priorityFee,
+                          transportUseAmmoBank: window.globalSettings.priorityFee,
+                          transportStopOnError: window.globalSettings.priorityFee,
+                          scanBlockPattern: window.globalSettings.priorityFee,
+                          scanBlockLength: window.globalSettings.priorityFee,
+                          scanBlockResetAfterResupply: window.globalSettings.priorityFee,
+                          scanResupplyOnLowFuel: window.globalSettings.priorityFee,
+                          scanSectorRegenTime: window.globalSettings.priorityFee,
+                          scanPauseTime: window.globalSettings.priorityFee,
+                          scanStrikeCount: window.globalSettings.priorityFee,
+                          statusPanelOpacity: window.globalSettings.priorityFee,
+                          autoStartScript: window.globalSettings.priorityFee,
+                          reloadPageOnFailedFleets: window.globalSettings.priorityFee,
                       }
                       */
-            globalSettings.savedProfile = [
+            window.globalSettings.savedProfile = [
               userProfileAcct.toString(),
               userProfileKeyIdx,
             ];
 
             await GM.setValue(
-              globalSettings.settingsGmKey,
-              JSON.stringify(globalSettings)
+              window.globalSettings.settingsGmKey,
+              JSON.stringify(window.globalSettings)
             );
           }
         }
@@ -2636,7 +2636,7 @@
           return a.label.toUpperCase().localeCompare(b.label.toUpperCase());
         });
         this.initComplete = true;
-        if (globalSettings.autoStartScript) {
+        if (window.globalSettings.autoStartScript) {
           assistant.assistStatusToggle();
           assistant.toggleAssistant();
         }
@@ -3093,7 +3093,7 @@
       }
 
       userFleets[i].resupplying = true;
-      if (globalSettings.scanBlockResetAfterResupply)
+      if (window.globalSettings.scanBlockResetAfterResupply)
         userFleets[i].scanBlockIdx = 0;
       const baseCoords = utils.coordinateUtils.ConvertCoords(
         userFleets[i].starbaseCoord
@@ -3181,7 +3181,7 @@
     debugLogLevel = Logger.LOG_LEVEL_ENUM.WARN;
 
     constructor() {
-      this.debugLogLevel = globalSettings.debugLogLevel;
+      this.debugLogLevel = window.globalSettings.debugLogLevel;
     }
 
     debug(...args) {
@@ -4875,7 +4875,7 @@
     ];
 
     buildScanBlock(destX, destY) {
-      const { scanBlockPattern, scanBlockLength } = globalSettings;
+      const { scanBlockPattern, scanBlockLength } = window.globalSettings;
 
       destX = Number(destX);
       destY = Number(destY);
@@ -5279,7 +5279,7 @@
                 userFleets[i].label
               )} ${fuelReadout} (low)`
             );
-            if (globalSettings.scanResupplyOnLowFuel) {
+            if (window.globalSettings.scanResupplyOnLowFuel) {
               await handleResupply(i, fleetCoords);
               moved = true;
             } else {
@@ -5348,7 +5348,7 @@
             `${utils.timeUtils.FleetTimeStamp(
               userFleets[i].label
             )} ⚡️ Strike ${userFleets[i].scanStrikes} / ${
-              globalSettings.scanStrikeCount
+              window.globalSettings.scanStrikeCount
             }`
           );
         } else {
@@ -5362,7 +5362,7 @@
         }
 
         const struckOut =
-          userFleets[i].scanStrikes >= globalSettings.scanStrikeCount;
+          userFleets[i].scanStrikes >= window.globalSettings.scanStrikeCount;
         if (struckOut) {
           logger.log(
             3,
@@ -5387,7 +5387,7 @@
 
         if (needPause) {
           userFleets[i].scanEnd =
-            Date.now() + globalSettings.scanPauseTime * 1000;
+            Date.now() + window.globalSettings.scanPauseTime * 1000;
           userFleets[i].state = `Scanning Paused [${utils.timeUtils.TimeToStr(
             new Date(userFleets[i].scanEnd)
           )}]`;
@@ -5406,7 +5406,7 @@
           if (sduFound)
             scanDelayMs = Math.max(
               scanDelayMs,
-              globalSettings.scanSectorRegenTime * 1000
+              window.globalSettings.scanSectorRegenTime * 1000
             );
           userFleets[i].scanEnd = Date.now() + scanDelayMs;
           userFleets[i].state = `Scanned [${Math.round(scanCondition)}%]${
@@ -5458,7 +5458,7 @@
   }
 
   class Settings {
-    GREASE_MONKEY_SETTINGS_KEY = "globalSettings";
+    GREASE_MONKEY_SETTINGS_KEY = "window.globalSettings";
     autoStartScript = false; //Should assistant automatically start after initialization is complete?
     confirmationCheckingDelay = 200; //How many milliseconds to wait before re-reading the chain for confirmation
     debugLogLevel = 3; //How much console logging you want to see (higher number = more, 0 = none)
@@ -5493,7 +5493,7 @@
     async loadGlobalSettings() {
       const rawSettingsData = await GM.getValue(this.settingsGmKey, "{}");
       let loadedSettings = JSON.parse(rawSettingsData);
-      globalSettings = {
+      const globalSettings = {
         priorityFee: utils.typeUtils.parseIntDefault(this.priorityFee, 1),
         lowPriorityFeeMultiplier: utils.typeUtils.parseIntDefault(
           this.lowPriorityFeeMultiplier,
@@ -5575,7 +5575,7 @@
         document.querySelector("#scanBlockPattern").value;
       const saveProfile = document.querySelector("#saveProfile").checked;
 
-      globalSettings = {
+      const globalSettings = {
         priorityFee: utils.typeUtils.parseIntDefault(
           document.querySelector("#priorityFee").value,
           1
@@ -5635,7 +5635,7 @@
         ),
       };
 
-      await GM.setValue(this.settingsGmKey, JSON.stringify(globalSettings));
+      await GM.setValue(this.settingsGmKey, JSON.stringify(globalSettings)); // TODO: The saving of all settings in here instead of in the `window` object.
 
       if (errBool === false) {
         errElem[0].innerHTML = "";
@@ -6122,7 +6122,7 @@
               userFleets[i].starbaseCoord,
               targetCargoManifest
             );
-            if (!loadedCargo && globalSettings.transportStopOnError) {
+            if (!loadedCargo && window.globalSettings.transportStopOnError) {
               //const newFleetState = `ERROR: No more cargo to load`;
               //logger.log(Logger.LOG_LEVEL_ENUM.INFO,`${utils.timeUtils.FleetTimeStamp(userFleets[i].label)} ${newFleetState}`);
               //userFleets[i].state = newFleetState;
@@ -6196,7 +6196,7 @@
               userFleets[i].destCoord,
               starbaseCargoManifest
             );
-            if (!loadedCargo && globalSettings.transportStopOnError) {
+            if (!loadedCargo && window.globalSettings.transportStopOnError) {
               //const newFleetState = `ERROR: No more cargo to load`;
               //logger.log(Logger.LOG_LEVEL_ENUM.INFO,`${utils.timeUtils.FleetTimeStamp(userFleets[i].label)} ${newFleetState}`);
               //userFleets[i].state = newFleetState;
@@ -6309,7 +6309,7 @@
   class UserInterfaceManager {
     mainWindow = new UserInterface();
     elementArray = [];
-    statusPanelOpacity = globalSettings.statusPanelOpacity / 100;
+    statusPanelOpacity = window.globalSettings.statusPanelOpacity / 100;
     styleConstants = {
       BASE_STYLES: `.assist-modal {display: none; position: fixed; z-index: 2; padding-top: 100px; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.4);} .assist-modal-content {position: relative; display: flex; flex-direction: column; background-color: rgb(41, 41, 48); margin: auto; padding: 0; border: 1px solid #888; width: 785px; min-width: 450px; max-width: 75%; height: auto; min-height: 50px; max-height: 85%; overflow-y: auto; box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2),0 6px 20px 0 rgba(0,0,0,0.19); -webkit-animation-name: animatetop; -webkit-animation-duration: 0.4s; animation-name: animatetop; animation-duration: 0.4s;} #assist-modal-error {color: red; margin-left: 5px; margin-right: 5px; font-size: 16px;} .assist-modal-header-right {color: rgb(255, 190, 77); margin-left: auto !important; font-size: 20px;} .assist-btn {background-color: rgb(41, 41, 48); color: rgb(255, 190, 77); margin-left: 2px; margin-right: 2px;} .assist-btn:hover {background-color: rgba(255, 190, 77, 0.2);} .assist-modal-close:hover, .assist-modal-close:focus {font-weight: bold; text-decoration: none; cursor: pointer;} .assist-modal-btn {color: rgb(255, 190, 77); padding: 5px 5px; margin-right: 5px; text-decoration: none; background-color: rgb(41, 41, 48); border: none; cursor: pointer;} .assist-modal-save:hover { background-color: rgba(255, 190, 77, 0.2); } .assist-modal-header {display: flex; align-items: center; padding: 2px 16px; background-color: rgba(255, 190, 77, 0.2); border-bottom: 2px solid rgb(255, 190, 77); color: rgb(255, 190, 77);} .assist-modal-body {padding: 2px 16px; font-size: 12px;} .assist-modal-body > table {width: 100%;} .assist-modal-body th, .assist-modal-body td {padding-right: 5px, padding-left: 5px;} #assistStatus {background-color: rgba(0,0,0,${this.statusPanelOpacity}); opacity: ${this.statusPanelOpacity}; backdrop-filter: blur(10px); position: absolute; top: 80px; right: 20px; z-index: 1;} #assistStarbaseStatus {background-color: rgba(0,0,0,${this.statusPanelOpacity}); opacity: ${this.statusPanelOpacity}; backdrop-filter: blur(10px); position: absolute; top: 80px; right: 20px; z-index: 1;} #assistCheck {background-color: rgba(0,0,0,0.75); backdrop-filter: blur(10px); position: absolute; margin: auto; left: 0; right: 0; top: 100px; width: 650px; min-width: 450px; max-width: 75%; z-index: 1;} .dropdown { position: absolute; display: none; margin-top: 25px; margin-left: 152px; background-color: rgb(41, 41, 48); min-width: 120px; box-shadow: 0 8px 16px 0 rgba(0, 0, 0, 0.2); z-index: 2; } .dropdown.show { display: block; } .assist-btn-alt { color: rgb(255, 190, 77); padding: 12px 16px; text-decoration: none; display: block; background-color: rgb(41, 41, 48); border: none; cursor: pointer; } .assist-btn-alt:hover { background-color: rgba(255, 190, 77, 0.2); } #checkresults { padding: 5px; margin-top: 20px; border: 1px solid grey; border-radius: 8px;} .dropdown button {width: 100%; text-align: left;} #assistModal table {border-collapse: collapse;} .assist-scan-row, .assist-mine-row, .assist-transport-row {background-color: rgba(255, 190, 77, 0.1); border-left: 1px solid white; border-right: 1px solid white; border-bottom: 1px solid white} .show-top-border {background-color: rgba(255, 190, 77, 0.1); border-left: 1px solid white; border-right: 1px solid white; border-top: 1px solid white;}`,
       ICON_STRING:
@@ -6612,7 +6612,7 @@
         "#settingsModal .assist-modal-save"
       );
       settingsModalSave.addEventListener("click", (e) => {
-        globalSettings.saveSettingsInput();
+        window.globalSettings.saveSettingsInput();
       });
       let settingsModalClose = document.querySelector(
         "#settingsModal .assist-modal-close"
@@ -7200,39 +7200,39 @@
     }
 
     async addSettingsInput() {
-      document.querySelector("#priorityFee").value = globalSettings.priorityFee;
+      document.querySelector("#priorityFee").value = window.globalSettings.priorityFee;
       document.querySelector("#lowPriorityFeeMultiplier").value =
-        globalSettings.lowPriorityFeeMultiplier;
+        window.globalSettings.lowPriorityFeeMultiplier;
       document.querySelector("#saveProfile").checked =
-        globalSettings.saveProfile;
+        window.globalSettings.saveProfile;
       document.querySelector("#confirmationCheckingDelay").value =
-        globalSettings.confirmationCheckingDelay;
+        window.globalSettings.confirmationCheckingDelay;
       document.querySelector("#debugLogLevel").value =
-        globalSettings.debugLogLevel;
+        window.globalSettings.debugLogLevel;
       document.querySelector("#transportUseAmmoBank").checked =
-        globalSettings.transportUseAmmoBank;
+        window.globalSettings.transportUseAmmoBank;
       document.querySelector("#transportStopOnError").checked =
-        globalSettings.transportStopOnError;
+        window.globalSettings.transportStopOnError;
       document.querySelector("#scanBlockPattern").value =
-        globalSettings.scanBlockPattern;
+        window.globalSettings.scanBlockPattern;
       document.querySelector("#scanBlockLength").value =
-        globalSettings.scanBlockLength;
+        window.globalSettings.scanBlockLength;
       document.querySelector("#scanBlockResetAfterResupply").checked =
-        globalSettings.scanBlockResetAfterResupply;
+        window.globalSettings.scanBlockResetAfterResupply;
       document.querySelector("#scanResupplyOnLowFuel").checked =
-        globalSettings.scanResupplyOnLowFuel;
+        window.globalSettings.scanResupplyOnLowFuel;
       document.querySelector("#scanSectorRegenTime").value =
-        globalSettings.scanSectorRegenTime;
+        window.globalSettings.scanSectorRegenTime;
       document.querySelector("#scanPauseTime").value =
-        globalSettings.scanPauseTime;
+        window.globalSettings.scanPauseTime;
       document.querySelector("#scanStrikeCount").value =
-        globalSettings.scanStrikeCount;
+        window.globalSettings.scanStrikeCount;
       document.querySelector("#statusPanelOpacity").value =
-        globalSettings.statusPanelOpacity;
+        window.globalSettings.statusPanelOpacity;
       document.querySelector("#autoStartScript").checked =
-        globalSettings.autoStartScript;
+        window.globalSettings.autoStartScript;
       document.querySelector("#reloadPageOnFailedFleets").value =
-        globalSettings.reloadPageOnFailedFleets;
+        window.globalSettings.reloadPageOnFailedFleets;
     }
 
     assistCheckToggle() {
@@ -7685,7 +7685,7 @@
   // window.Starbase = Starbase;
   // window.Transport = Transport;
   // window.User = User;
-  let globalSettings = new Settings();
+  window.globalSettings = new Settings();
   const logger = new Logger();
 
   const blockchainManager = new BlockchainManager(
@@ -7754,7 +7754,7 @@
     },
   };
 
-  await globalSettings.loadGlobalSettings();
+  await window.globalSettings.loadGlobalSettings();
 
   let solanaReadCount = 0;
   let solanaWriteCount = 0;
