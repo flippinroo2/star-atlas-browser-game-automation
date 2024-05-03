@@ -406,7 +406,8 @@
         const fleetName = fleet ? fleet.label : "unknown";
         let macroOpStart = Date.now();
         if (!priorityFeeMultiplier)
-          priorityFeeMultiplier = window.globalSettings.lowPriorityFeeMultiplier;
+          priorityFeeMultiplier =
+            window.globalSettings.lowPriorityFeeMultiplier;
         priorityFeeMultiplier = priorityFeeMultiplier / 100;
 
         let confirmed = false;
@@ -533,7 +534,10 @@
             logger.fail(
               `${utils.timeUtils.FleetTimeStamp(
                 fleetName
-              )} <${opName}> CONFIRM FAIL ❌ - ${confirmation.name} after ${confirmationTimeStr}`, fleet
+              )} <${opName}> CONFIRM FAIL ❌ - ${
+                confirmation.name
+              } after ${confirmationTimeStr}`,
+              fleet
             );
             logger.log(
               Logger.LOG_LEVEL_ENUM.INFO,
@@ -1164,7 +1168,10 @@
             .instruction(),
         };
 
-        logger.log(Logger.LOG_LEVEL_ENUM.INFO, `${utils.timeUtils.FleetTimeStamp(fleet.label)} Docking`);
+        logger.log(
+          Logger.LOG_LEVEL_ENUM.INFO,
+          `${utils.timeUtils.FleetTimeStamp(fleet.label)} Docking`
+        );
         this.updateFleetState(fleet, "Docking");
 
         let txResult = await blockchainManager.txSignAndSend(tx, fleet, "DOCK");
@@ -3192,14 +3199,14 @@
       debugger;
     }
 
-    fail(message){
+    fail(message) {
       console.log(
         "%c" + message,
         "color: red; background-color: black; font-size: 18px;"
       );
     }
 
-    success(message){
+    success(message) {
       console.log(
         "%c" + message,
         "color: green; background-color: black; font-size: 18px;"
@@ -3875,7 +3882,10 @@
         );
 
         //await utils.timeUtils.wait(2000);
-        logger.log(Logger.LOG_LEVEL_ENUM.INFO, `${utils.timeUtils.FleetTimeStamp(fleet.label)} Idle 💤`);
+        logger.log(
+          Logger.LOG_LEVEL_ENUM.INFO,
+          `${utils.timeUtils.FleetTimeStamp(fleet.label)} Idle 💤`
+        );
         Fleet.prototype.updateFleetState(fleet, "Idle");
 
         resolve(txResult);
@@ -5635,7 +5645,7 @@
         ),
       };
 
-      await GM.setValue(this.settingsGmKey, JSON.stringify(globalSettings)); // TODO: The saving of all settings in here instead of in the `window` object.
+      await GM.setValue(this.settingsGmKey, JSON.stringify(globalSettings));
 
       if (errBool === false) {
         errElem[0].innerHTML = "";
@@ -6591,10 +6601,8 @@
       autoContainer.append(profileModal.element);
       //autoContainer.append(addAcctModal);
 
-      
       this.mainWindow.addElement(assistantModal);
       this.mainWindow.addElement(settingsModal);
-
 
       let assistModalClose = document.querySelector(
         "#assistModal .assist-modal-close"
@@ -7200,7 +7208,8 @@
     }
 
     async addSettingsInput() {
-      document.querySelector("#priorityFee").value = window.globalSettings.priorityFee;
+      document.querySelector("#priorityFee").value =
+        window.globalSettings.priorityFee;
       document.querySelector("#lowPriorityFeeMultiplier").value =
         window.globalSettings.lowPriorityFeeMultiplier;
       document.querySelector("#saveProfile").checked =
@@ -7688,9 +7697,7 @@
   window.globalSettings = new Settings();
   const logger = new Logger();
 
-  const blockchainManager = new BlockchainManager(
-    new ProxyManager()
-  );
+  const blockchainManager = new BlockchainManager(new ProxyManager());
   const game = new Game();
   const assistant = new Assistant();
   const utils = {
